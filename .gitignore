@@ -1,0 +1,22 @@
+# Environment & secrets
+.env
+credentials/
+data/
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

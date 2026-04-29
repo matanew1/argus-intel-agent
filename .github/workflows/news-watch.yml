@@ -1,0 +1,36 @@
+name: News Watch
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # Every 2 hours
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — classify but skip all API writes'
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run News Watch
+        run: python -m argus.workflows.news_watch
+        env:
+          DATABASE_URL:             ${{ secrets.DATABASE_URL }}
+          MISTRAL_API_KEY:          ${{ secrets.MISTRAL_API_KEY }}
+          NEWSAPI_KEY:              ${{ secrets.NEWSAPI_KEY }}
+          SLACK_BOT_TOKEN:          ${{ secrets.SLACK_BOT_TOKEN }}
+          GOOGLE_CREDENTIALS_JSON:  ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          CALENDAR_ID:              ${{ secrets.CALENDAR_ID }}
+          DRY_RUN:                  ${{ github.event.inputs.dry_run || 'false' }}

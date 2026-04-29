@@ -1,0 +1,34 @@
+competitors:
+  - name: "OpenAI"
+    news_query: "OpenAI funding product launch announcement"
+    careers_url: "https://openai.com/careers"
+    pricing_urls:
+      - "https://openai.com/api/pricing"
+  - name: "Anthropic"
+    news_query: "Anthropic Claude AI announcement funding"
+    careers_url: "https://www.anthropic.com/careers"
+    pricing_urls:
+      - "https://www.anthropic.com/pricing"
+
+criteria:
+  what_i_care_about: |
+    I am building an AI-native SaaS product. I care about:
+    - Competitor fundraising rounds and valuations
+    - New AI model releases and capability announcements
+    - Pricing changes (especially enterprise tier changes)
+    - Engineering leadership hires (VP Eng, Head of AI, CTO)
+    - Expansion into new markets or verticals
+    - Partnerships with major cloud providers
+    I do NOT care about: blog posts, conference appearances, minor UI updates,
+    awards, or job postings for administrative roles.
+
+notifications:
+  slack_channel: "YOUR_SLACK_CHANNEL_ID"
+  slack_dm_user: "YOUR_SLACK_USER_ID"
+  calendar_id: "primary"
+  google_sheet_id: "YOUR_GOOGLE_SHEET_ID"
+  digest_email: "matanew1@gmail.com"
+
+llm:
+  model: "mistral-small-latest"
+  temperature: 0

@@ -1,0 +1,35 @@
+name: Job Posting Watch
+
+on:
+  schedule:
+    - cron: '0 9 * * *'    # Daily at 9am UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — classify but skip all API writes'
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Job Watch
+        run: python -m argus.workflows.job_watch
+        env:
+          DATABASE_URL:             ${{ secrets.DATABASE_URL }}
+          MISTRAL_API_KEY:          ${{ secrets.MISTRAL_API_KEY }}
+          SLACK_BOT_TOKEN:          ${{ secrets.SLACK_BOT_TOKEN }}
+          GOOGLE_CREDENTIALS_JSON:  ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID:          ${{ secrets.GOOGLE_SHEET_ID }}
+          DRY_RUN:                  ${{ github.event.inputs.dry_run || 'false' }}

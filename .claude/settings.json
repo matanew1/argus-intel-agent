@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python -m pytest tests/ -v)",
+      "Bash(.venv/bin/python -m py_compile argus/core/logger.py argus/core/database.py argus/core/models.py argus/core/config_loader.py argus/core/dedup.py)",
+      "Bash(echo \"core: $?\")",
+      "Bash(.venv/bin/python -m pip install pyflakes -q)",
+      "Bash(.venv/bin/python -m pyflakes argus/)",
+      "Bash(.venv/bin/python -m pytest tests/ -q)"
+    ]
+  }
+}
