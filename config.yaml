@@ -23,10 +23,10 @@ criteria:
     awards, or job postings for administrative roles.
 
 notifications:
-  slack_channel: "YOUR_SLACK_CHANNEL_ID"
-  slack_dm_user: "YOUR_SLACK_USER_ID"
-  calendar_id: "primary"
-  google_sheet_id: "YOUR_GOOGLE_SHEET_ID"
+  slack_channel: "C0B0QRYAZ7D"
+  slack_dm_user: "U0B0FLRTSTZ"
+  calendar_id: "matanew1@gmail.com"
+  google_sheet_id: "1lQ9ixB35-zkUnsQjl3r61_t5U2UUnMbeUWQwh0rlpvA"
   digest_email: "matanew1@gmail.com"
 
 llm:
