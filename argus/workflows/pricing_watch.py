@@ -92,9 +92,14 @@ class PricingWatchWorkflow(BaseWorkflow):
 
     @staticmethod
     def _get_snapshot(url: str) -> PageSnapshot | None:
-        """Return the most recent PageSnapshot for url, or None if not yet stored."""
+        """Return a detached-safe PageSnapshot for url, or None if not yet stored."""
         with get_session() as session:
-            return session.query(PageSnapshot).filter_by(url=url).first()
+            row = session.query(PageSnapshot).filter_by(url=url).first()
+            if row is None:
+                return None
+            # Access all needed attributes inside the session before it closes
+            session.expunge(row)
+            return row
 
     @staticmethod
     def _store_snapshot(url: str, hash_val: str, text: str) -> None:
