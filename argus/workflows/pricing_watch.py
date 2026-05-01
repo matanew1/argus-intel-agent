@@ -50,18 +50,18 @@ class PricingWatchWorkflow(BaseWorkflow):
             return
 
         new_hash = content_hash(new_text)
-        old_snapshot = self._get_snapshot(url)
+        old = self._safe_action(self._get_snapshot, run_log, "get_snapshot", url)
 
-        if old_snapshot is None:
-            self._store_snapshot(url, new_hash, new_text)
+        if old is None:
+            self._safe_action(self._store_snapshot, run_log, "store_snapshot", url, new_hash, new_text)
             log.info("Baseline stored for %s", url)
             return
 
-        if old_snapshot.content_hash == new_hash:
+        if old["content_hash"] == new_hash:
             log.info("No change detected for %s", url)
             return
 
-        diff = unified_diff(old_snapshot.content_text, new_text)
+        diff = unified_diff(old["content_text"], new_text)
         judgment = self._safe_action(classify_diff, run_log, "classify_diff", competitor, url, diff)
         if judgment is None:
             return
@@ -91,15 +91,13 @@ class PricingWatchWorkflow(BaseWorkflow):
         self._store_snapshot(url, new_hash, new_text)
 
     @staticmethod
-    def _get_snapshot(url: str) -> PageSnapshot | None:
-        """Return a detached-safe PageSnapshot for url, or None if not yet stored."""
+    def _get_snapshot(url: str) -> dict | None:
+        """Return snapshot data as a plain dict, or None if no baseline exists yet."""
         with get_session() as session:
             row = session.query(PageSnapshot).filter_by(url=url).first()
             if row is None:
                 return None
-            # Access all needed attributes inside the session before it closes
-            session.expunge(row)
-            return row
+            return {"content_hash": row.content_hash, "content_text": row.content_text}
 
     @staticmethod
     def _store_snapshot(url: str, hash_val: str, text: str) -> None:
