@@ -68,26 +68,35 @@ class WeeklyDigestWorkflow(BaseWorkflow):
             log.info("Dry run — digest synthesised but not sent:\n%s", digest_md[:300])
 
     @staticmethod
-    def _load_recent_logs(cutoff: datetime) -> list[RunLog]:
-        """Return all non-digest RunLog rows created after cutoff, ordered by time."""
+    def _load_recent_logs(cutoff: datetime) -> list[dict]:
+        """Return all non-digest RunLog rows from after cutoff as plain dicts (avoids detached-instance errors)."""
         with get_session() as session:
-            return (
+            rows = (
                 session.query(RunLog)
                 .filter(RunLog.trigger_time >= cutoff)
                 .filter(RunLog.workflow != "weekly_digest")
                 .order_by(RunLog.trigger_time.asc())
                 .all()
             )
+            return [
+                {
+                    "workflow":     r.workflow,
+                    "trigger_time": r.trigger_time,
+                    "decisions":    r.decisions,
+                    "actions_taken": r.actions_taken,
+                }
+                for r in rows
+            ]
 
     @staticmethod
-    def _serialize_logs(logs: list[RunLog]) -> str:
-        """Convert a list of RunLog rows into a human-readable plain-text block."""
+    def _serialize_logs(logs: list[dict]) -> str:
+        """Convert a list of RunLog dicts into a human-readable plain-text block."""
         lines: list[str] = []
         for r in logs:
-            lines.append(f"\n--- {r.workflow} at {r.trigger_time.isoformat()} ---")
-            for d in json.loads(r.decisions):
+            lines.append(f"\n--- {r['workflow']} at {r['trigger_time'].isoformat()} ---")
+            for d in json.loads(r["decisions"]):
                 lines.append(f"  DECISION: {d['label']} — {d['reasoning']}")
-            for a in json.loads(r.actions_taken):
+            for a in json.loads(r["actions_taken"]):
                 lines.append(f"  ACTION: {a['action']} → {a['target']} ({a['status']})")
         return "\n".join(lines)
 
