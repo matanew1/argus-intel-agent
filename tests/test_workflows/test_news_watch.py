@@ -18,17 +18,17 @@ _CFG = {
 
 
 @patch("argus.workflows.news_watch.fetch_news")
-@patch("argus.workflows.news_watch.judge_news")
+@patch("argus.workflows.news_watch.classify_news")
 @patch("argus.workflows.news_watch.NewsWatchWorkflow._create_calendar_event")
 @patch("argus.workflows.base.ConfigLoader")
-def test_news_watch_funding_creates_calendar_event(mock_cfg, mock_cal, mock_judge, mock_news):
+def test_news_watch_funding_creates_calendar_event(mock_cfg, mock_cal, mock_classify, mock_news):
     from argus.integrations.news_client import Article
-    from argus.judges.news import NewsJudgment
+    from argus.classifiers.news import NewsSignal
     from argus.workflows.news_watch import NewsWatchWorkflow
 
     mock_cfg.instance.return_value.get.return_value = _CFG
     mock_news.return_value = [Article(**SAMPLE_ARTICLE)]
-    mock_judge.return_value = NewsJudgment(label="funding", reasoning="Big round.", confidence=0.95)
+    mock_classify.return_value = NewsSignal(label="funding", reasoning="Big round.", confidence=0.95)
     mock_cal.return_value = "https://calendar.google.com/event/123"
 
     wf = NewsWatchWorkflow()
@@ -40,17 +40,17 @@ def test_news_watch_funding_creates_calendar_event(mock_cfg, mock_cal, mock_judg
 
 
 @patch("argus.workflows.news_watch.fetch_news")
-@patch("argus.workflows.news_watch.judge_news")
+@patch("argus.workflows.news_watch.classify_news")
 @patch("argus.workflows.news_watch.NewsWatchWorkflow._post_to_slack")
 @patch("argus.workflows.base.ConfigLoader")
-def test_news_watch_controversy_posts_to_slack(mock_cfg, mock_slack, mock_judge, mock_news):
+def test_news_watch_controversy_posts_to_slack(mock_cfg, mock_slack, mock_classify, mock_news):
     from argus.integrations.news_client import Article
-    from argus.judges.news import NewsJudgment
+    from argus.classifiers.news import NewsSignal
     from argus.workflows.news_watch import NewsWatchWorkflow
 
     mock_cfg.instance.return_value.get.return_value = _CFG
     mock_news.return_value = [Article(**SAMPLE_ARTICLE)]
-    mock_judge.return_value = NewsJudgment(label="controversy", reasoning="Data breach.", confidence=0.9)
+    mock_classify.return_value = NewsSignal(label="controversy", reasoning="Data breach.", confidence=0.9)
 
     wf = NewsWatchWorkflow()
     wf.run(dry_run=False)
@@ -59,18 +59,18 @@ def test_news_watch_controversy_posts_to_slack(mock_cfg, mock_slack, mock_judge,
 
 
 @patch("argus.workflows.news_watch.fetch_news")
-@patch("argus.workflows.news_watch.judge_news")
+@patch("argus.workflows.news_watch.classify_news")
 @patch("argus.workflows.news_watch.NewsWatchWorkflow._post_to_slack")
 @patch("argus.workflows.news_watch.NewsWatchWorkflow._create_calendar_event")
 @patch("argus.workflows.base.ConfigLoader")
-def test_news_watch_noise_takes_no_action(mock_cfg, mock_cal, mock_slack, mock_judge, mock_news):
+def test_news_watch_noise_takes_no_action(mock_cfg, mock_cal, mock_slack, mock_classify, mock_news):
     from argus.integrations.news_client import Article
-    from argus.judges.news import NewsJudgment
+    from argus.classifiers.news import NewsSignal
     from argus.workflows.news_watch import NewsWatchWorkflow
 
     mock_cfg.instance.return_value.get.return_value = _CFG
     mock_news.return_value = [Article(**SAMPLE_ARTICLE)]
-    mock_judge.return_value = NewsJudgment(label="noise", reasoning="Just a blog post.", confidence=0.8)
+    mock_classify.return_value = NewsSignal(label="noise", reasoning="Just a blog post.", confidence=0.8)
 
     wf = NewsWatchWorkflow()
     run_log = wf.run(dry_run=False)

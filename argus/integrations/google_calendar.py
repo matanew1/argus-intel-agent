@@ -1,11 +1,10 @@
-import os
-import tempfile
-from datetime import datetime, timedelta
+"""Google Calendar API client for creating strategy review events."""
+from datetime import datetime, timedelta, timezone
 
-from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from argus.core.logger import get_logger
+from argus.integrations.google_auth import get_google_credentials
 
 log = get_logger(__name__)
 
@@ -13,19 +12,8 @@ _SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 
 def _get_service():
-    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-    if creds_json:
-        # GitHub Actions: credentials stored as JSON string in env var
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write(creds_json)
-            creds_path = f.name
-    else:
-        creds_path = "credentials/google_service_account.json"
-
-    creds = service_account.Credentials.from_service_account_file(
-        creds_path, scopes=_SCOPES
-    )
-    return build("calendar", "v3", credentials=creds)
+    """Return an authenticated Google Calendar API service client."""
+    return build("calendar", "v3", credentials=get_google_credentials(_SCOPES))
 
 
 def create_strategy_event(
@@ -35,9 +23,9 @@ def create_strategy_event(
     date: datetime,
     duration_minutes: int = 30,
 ) -> str:
-    """Create a calendar event. Returns the event HTML link."""
+    """Create a calendar event at 9:00 UTC on the given date. Returns the event HTML link."""
     service = _get_service()
-    start = date.replace(hour=9, minute=0, second=0, microsecond=0)
+    start = date.replace(hour=9, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
     end = start + timedelta(minutes=duration_minutes)
     body = {
         "summary": title,

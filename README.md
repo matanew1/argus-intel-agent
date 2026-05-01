@@ -1,27 +1,29 @@
 # Argus Intel Agent
 
-An always-on competitive intelligence agent that watches a list of competitor companies and acts autonomously — no human prompts, ever.
+An always-on competitive intelligence agent that watches competitor companies and acts autonomously — no human prompts, ever.
 
 ## What It Does
 
 | Workflow | Schedule | Action |
 |---|---|---|
 | **News Watch** | Every 2 hours | Classifies news → Calendar event (funding/launch) or Slack alert (controversy) |
-| **Job Posting Watch** | Daily 9am | Tags new roles → Google Sheet row for non-routine signals |
-| **Pricing Watch** | Daily 8am | Diffs competitor pages → Slack DM + Calendar event for material changes |
-| **Weekly Digest** | Friday 4pm | LLM synthesizes week's signals → Email + Slack TL;DR |
+| **Job Watch** | Daily 9am UTC | Clusters new roles → Google Sheet row for non-routine signals |
+| **Pricing Watch** | Daily 8am UTC | Diffs competitor pages → Slack DM + Calendar event for material changes |
+| **Weekly Digest** | Friday 4pm UTC | Synthesizes week's signals → Email + Slack TL;DR |
 
-All decisions are LLM-driven (Mistral AI). Zero regex. Every decision's reasoning is logged.
+All decisions are LLM-driven (Mistral AI). Zero regex. Every classification and its reasoning is logged to Postgres before any action is taken.
+
+---
 
 ## Architecture
 
 ```
-config.yaml ──► ConfigLoader ──► Workflows ──► Judges (Mistral AI)
-                                     │              │
-                                     ▼              ▼
-                              Neon Postgres     Integrations
-                         (seen_items, run_log,  (Slack, Calendar,
-                          config, page_snapshots) Sheets, Resend)
+config.yaml ──► ConfigLoader ──► Workflows ──► Classifiers (Mistral AI)
+                                     │                │
+                                     ▼                ▼
+                              Neon Postgres      Integrations
+                         (seen_items, run_log,   (Slack, Calendar,
+                          config, page_snapshots)  Sheets, Resend)
                                      │
                                      ▼
                             GitHub Actions (cron scheduler)
@@ -30,15 +32,38 @@ config.yaml ──► ConfigLoader ──► Workflows ──► Judges (Mistral
                             Streamlit Dashboard (localhost:8501)
 ```
 
+---
+
+## Project Structure
+
+```
+argus/
+├── core/           # database, models, config_loader, dedup, logger
+├── classifiers/    # one LLM classifier per decision type (news, jobs, diff, digest)
+├── integrations/   # Slack, Google Calendar/Sheets, NewsAPI, Resend, scraper, google_auth
+├── workflows/      # 4 workflows + BaseWorkflow template
+└── dashboard/      # Streamlit status UI
+
+.github/workflows/  # 5 cron triggers (news, jobs, pricing, digest, cleanup)
+config.yaml         # single source of truth — competitors, criteria, notification IDs
+.env                # secrets (never committed)
+```
+
+---
+
 ## Prerequisites
 
 - Python 3.11+
-- [Neon](https://neon.tech) free account (Postgres DB)
-- [Mistral AI](https://mistral.ai) API key (free tier)
-- [NewsAPI](https://newsapi.org) key (free tier, 100 req/day)
+- [Neon](https://neon.tech) free account (Postgres)
+- [Mistral AI](https://mistral.ai) API key
+- [NewsAPI](https://newsapi.org) key (free: 100 req/day)
 - Slack app with `chat:write` + `im:write` scopes
-- [Resend](https://resend.com) account + verified sender domain
+- [Resend](https://resend.com) account (free: 3,000 emails/month)
 - Google Cloud service account with Calendar + Sheets APIs enabled
+
+See [docs/api_setup.md](docs/api_setup.md) for full setup instructions for each service.
+
+---
 
 ## Quickstart
 
@@ -51,61 +76,49 @@ cp .env.example .env
 # Fill in your API keys in .env
 ```
 
-Edit `config.yaml` to set your competitors, criteria, and notification IDs.
+Edit `config.yaml` to set your competitors, criteria, and notification IDs (Slack channel, calendar ID, sheet ID).
 
-### 2. Set up Neon Postgres
-
-1. Create a free project at [neon.tech](https://neon.tech)
-2. Copy the connection string to `DATABASE_URL` in `.env`
-3. Create tables:
+### 2. Create database tables
 
 ```bash
 pip install -r requirements.txt
 python -c "from argus.core.database import init_db; init_db(); print('Tables created')"
 ```
 
-### 3. Set up Google service account
-
-See [docs/api_setup.md](docs/api_setup.md) for full step-by-step instructions. Summary:
-1. GCP → enable Calendar API + Sheets API
-2. Create Service Account → download JSON → save to `credentials/google_service_account.json`
-3. Share your calendar and spreadsheet with the service account email
-
-### 4. Run locally (dashboard)
+### 3. Run locally (dry run — no real API writes)
 
 ```bash
-docker-compose up          # starts local Postgres + Streamlit at localhost:8501
+DRY_RUN=true python -m argus.workflows.news_watch
+DRY_RUN=true python -m argus.workflows.job_watch
+DRY_RUN=true python -m argus.workflows.pricing_watch
+DRY_RUN=true python -m argus.workflows.weekly_digest
 ```
 
-To test a workflow locally (dry run — no real API writes):
+### 4. Run the dashboard
 
 ```bash
-DATABASE_URL=postgresql://argus:argus@localhost:5432/argus \
-  DRY_RUN=true \
-  python -m argus.workflows.news_watch
+streamlit run argus/dashboard/app.py
+# Open http://localhost:8501
 ```
 
-### 5. Deploy scheduler to GitHub Actions
+### 5. Deploy to GitHub Actions
 
 1. Push this repo to GitHub
 2. Add all secrets at **Settings → Secrets and variables → Actions**:
 
-| Secret | Value |
+| Secret | Description |
 |---|---|
 | `DATABASE_URL` | Neon connection string (`postgresql://...?sslmode=require`) |
 | `MISTRAL_API_KEY` | Mistral API key |
 | `NEWSAPI_KEY` | NewsAPI key |
 | `SLACK_BOT_TOKEN` | `xoxb-...` bot token |
 | `RESEND_API_KEY` | Resend API key |
-| `RESEND_FROM_EMAIL` | Verified sender address |
-| `GOOGLE_CREDENTIALS_JSON` | Full JSON content of service account key file |
-| `CALENDAR_ID` | `primary` or your calendar's ID |
+| `RESEND_FROM_EMAIL` | Verified sender address (or `onboarding@resend.dev` for testing) |
+| `GOOGLE_CREDENTIALS_JSON` | Full JSON content of service account key |
+| `CALENDAR_ID` | Your Google Calendar ID (usually your Gmail address) |
 | `GOOGLE_SHEET_ID` | Spreadsheet ID from its URL |
-| `SLACK_CHANNEL_ID` | `#competitive-intel` channel ID |
-| `SLACK_DM_USER_ID` | Your Slack user ID (for urgent pricing DMs) |
 
-3. Enable Actions in the repo. Workflows fire automatically on schedule.
-4. Test manually: **Actions → News Watch → Run workflow** (tick `dry_run`)
+3. Workflows fire automatically on schedule. Test manually via **Actions → [workflow] → Run workflow** with `dry_run: true` first.
 
 ### 6. Run tests
 
@@ -113,35 +126,32 @@ DATABASE_URL=postgresql://argus:argus@localhost:5432/argus \
 pytest tests/ -v
 ```
 
+---
+
+## Configuration
+
+Edit `config.yaml` to:
+- Add or remove competitors (name, news query, careers URL, pricing URLs)
+- Update `what_i_care_about` criteria in plain English — passed to every LLM classifier
+- Change notification IDs (Slack channel, calendar, sheet, digest email)
+
+Changes are picked up on the next workflow run with no restart needed (ConfigLoader watches the file).
+
+---
+
 ## Dashboard
 
 ```bash
 streamlit run argus/dashboard/app.py
-# Open http://localhost:8501
 ```
 
 Shows:
-- System health (green/red)
+- System health banner (green/red based on last 24h error rate)
 - Last run per workflow with elapsed time
-- Last 20 actions feed (`"10:00 AM: calendar_event → primary (created)"`)
+- Last 20 actions feed
 - Error log with full tracebacks
 
-## Project Structure
+---
 
-```
-argus/
-├── core/           # database, models, config_loader, dedup, logger
-├── judges/         # one LLM judge module per decision type
-├── integrations/   # Slack, Google Calendar/Sheets, NewsAPI, Resend, Scraper
-├── workflows/      # 4 workflows + BaseWorkflow template
-└── dashboard/      # Streamlit app (~120 lines)
-
-.github/workflows/  # 4 cron triggers + weekly cleanup
-config.yaml         # single source of truth — edit to tune the agent
-```
-
-## Customization
-
-Edit `config.yaml` to add/remove competitors, update the `what_i_care_about` criteria (plain English), or change notification IDs. Changes are picked up on the next workflow run — no restart needed.
-
-For more details see [docs/api_setup.md](docs/api_setup.md) and [docs/architecture.md](docs/architecture.md).
+For full service setup instructions see [docs/api_setup.md](docs/api_setup.md).
+For architecture details see [docs/architecture.md](docs/architecture.md).

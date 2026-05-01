@@ -1,3 +1,4 @@
+"""NewsAPI client for fetching recent articles matching a query."""
 import os
 from dataclasses import dataclass
 
@@ -12,6 +13,8 @@ _NEWSAPI_BASE = "https://newsapi.org/v2/everything"
 
 @dataclass
 class Article:
+    """A single news article returned by the NewsAPI."""
+
     title: str
     description: str
     url: str
@@ -20,7 +23,18 @@ class Article:
 
 
 def fetch_news(query: str, max_results: int = 10) -> list[Article]:
-    """Fetch recent articles matching query from NewsAPI."""
+    """Fetch recent articles matching query from NewsAPI.
+
+    Args:
+        query: Search string passed to NewsAPI ``q`` parameter.
+        max_results: Maximum number of articles to return (default 10).
+
+    Returns:
+        List of Article dataclass instances, ordered by publication date descending.
+
+    Raises:
+        requests.RequestException: If the HTTP request fails.
+    """
     try:
         resp = requests.get(
             _NEWSAPI_BASE,

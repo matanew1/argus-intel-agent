@@ -1,3 +1,4 @@
+"""Thread-safe singleton that loads config.yaml and hot-reloads it on file changes."""
 import json
 import threading
 from pathlib import Path
@@ -15,10 +16,17 @@ _CONFIG_PATH = Path("config.yaml")
 
 
 class ConfigLoader:
+    """Singleton config loader with file-watching and DB sync.
+
+    Usage:
+        cfg = ConfigLoader.instance().get()
+    """
+
     _instance: "ConfigLoader | None" = None
     _lock: threading.RLock = threading.RLock()
 
     def __init__(self, path: Path = _CONFIG_PATH) -> None:
+        """Load config from path and start the file watcher."""
         self._path = path
         self._data: dict[str, Any] = {}
         self._load()
@@ -26,6 +34,7 @@ class ConfigLoader:
 
     @classmethod
     def instance(cls, path: Path = _CONFIG_PATH) -> "ConfigLoader":
+        """Return the singleton, creating it on first call (double-checked lock)."""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -33,6 +42,7 @@ class ConfigLoader:
         return cls._instance
 
     def _load(self) -> None:
+        """Parse YAML from disk and sync the result to the DB Config row."""
         with self._lock:
             with open(self._path) as f:
                 self._data = yaml.safe_load(f)
@@ -40,10 +50,15 @@ class ConfigLoader:
             self._sync_to_db()
 
     def get(self) -> dict[str, Any]:
+        """Return a shallow copy of the current config dict (thread-safe)."""
         with self._lock:
             return dict(self._data)
 
     def _sync_to_db(self) -> None:
+        """Write the current config into the single Config DB row (id=1).
+
+        Failures are logged and swallowed so a DB outage never blocks startup.
+        """
         try:
             from argus.core.database import get_session
             from argus.core.models import Config
@@ -62,6 +77,7 @@ class ConfigLoader:
             log.warning("Could not sync config to DB: %s", exc)
 
     def _start_watcher(self) -> None:
+        """Spawn a daemon watchdog thread that calls _load() when config.yaml changes."""
         loader = self
 
         class _Handler(FileSystemEventHandler):

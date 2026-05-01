@@ -1,6 +1,6 @@
 """Streamlit dashboard — last run per workflow, last 20 actions, error rate."""
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
@@ -17,9 +17,10 @@ st.title("🔍 Argus Intel Agent")
 
 @st.cache_data(ttl=30)
 def load_error_rate(hours: int = 24) -> dict:
+    """Return total runs, errored runs, and error rate % for the last N hours."""
     session = SessionLocal()
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         logs = session.query(RunLog).filter(RunLog.trigger_time >= cutoff).all()
         total = len(logs)
         errored = sum(1 for r in logs if json.loads(r.errors))
@@ -30,6 +31,7 @@ def load_error_rate(hours: int = 24) -> dict:
 
 @st.cache_data(ttl=30)
 def load_run_summary() -> pd.DataFrame:
+    """Return a DataFrame with last run time, total runs, and total items per workflow."""
     session = SessionLocal()
     try:
         rows = (
@@ -49,6 +51,7 @@ def load_run_summary() -> pd.DataFrame:
 
 @st.cache_data(ttl=30)
 def load_recent_actions(n: int = 20) -> list[dict]:
+    """Return the N most recent actions across all workflows."""
     session = SessionLocal()
     try:
         logs = session.query(RunLog).order_by(RunLog.trigger_time.desc()).limit(60).all()
@@ -70,9 +73,10 @@ def load_recent_actions(n: int = 20) -> list[dict]:
 
 @st.cache_data(ttl=30)
 def load_error_logs(hours: int = 24) -> list[RunLog]:
+    """Return RunLog rows from the last N hours that contain at least one error."""
     session = SessionLocal()
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         return (
             session.query(RunLog)
             .filter(RunLog.trigger_time >= cutoff)
@@ -84,9 +88,10 @@ def load_error_logs(hours: int = 24) -> list[RunLog]:
 
 
 def humanize_time(dt: datetime | None) -> str:
+    """Convert a UTC datetime to a human-readable relative string (e.g. '5m ago')."""
     if dt is None:
         return "never"
-    delta = datetime.utcnow() - dt
+    delta = datetime.now(timezone.utc) - dt
     secs = int(delta.total_seconds())
     if secs < 60:
         return f"{secs}s ago"

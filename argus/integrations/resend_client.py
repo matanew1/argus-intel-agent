@@ -1,3 +1,4 @@
+"""Resend email client for sending the weekly digest."""
 import os
 
 import markdown
@@ -11,7 +12,19 @@ _FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "argus@updates.argus-intel.dev")
 
 
 def send_digest_email(to: str, subject: str, markdown_body: str) -> str:
-    """Send HTML email via Resend. Returns message ID."""
+    """Convert markdown to HTML and send via Resend. Returns the Resend message ID.
+
+    Args:
+        to: Recipient email address.
+        subject: Email subject line.
+        markdown_body: Digest content in markdown format.
+
+    Returns:
+        Resend message ID string.
+
+    Raises:
+        Exception: If the Resend API call fails.
+    """
     resend.api_key = os.environ["RESEND_API_KEY"]
     html_body = markdown.markdown(markdown_body, extensions=["nl2br", "tables"])
     result = resend.Emails.send(
