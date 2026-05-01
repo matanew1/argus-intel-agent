@@ -838,13 +838,7 @@ def render_styles() -> None:
         }
 
         .metric-card::after {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 4px;
-            background: var(--accent, var(--argus-teal));
+            display: none;
         }
 
         .metric-label {
@@ -1155,38 +1149,38 @@ def render_section_title(label: str) -> None:
 
 
 def render_metric_grid(summary_df: pd.DataFrame) -> None:
-    """Render workflow summary metric cards."""
+    """Render workflow summary metric cards using st.columns (avoids CSS custom-property parsing bug)."""
     if summary_df.empty:
         st.markdown('<div class="empty-panel">No workflow runs recorded yet.</div>', unsafe_allow_html=True)
         return
 
     accents = ["#008a83", "#e85d75", "#6457d8", "#f0b23d", "#2f9e6d"]
-    cards = []
-    for idx, (_, row) in enumerate(summary_df.iterrows()):
-        label = escape(str(row["workflow"]).replace("_", " ").title())
-        elapsed = escape(humanize_time(row["last_run"]))
-        total_runs = int(row["total_runs"] or 0)
-        total_items = int(row["total_items"] or 0)
-        accent = accents[idx % len(accents)]
-        cards.append(
-            f"""
-            <div class="metric-card" style="--accent: {accent};">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value">{elapsed}</div>
-                <div class="metric-meta">{total_runs} total runs | {total_items} items processed</div>
-            </div>
-            """
-        )
-    st.markdown(f'<div class="metric-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    cols = st.columns(max(1, len(summary_df)))
+    for idx, (col, (_, row)) in enumerate(zip(cols, summary_df.iterrows())):
+        with col:
+            label = escape(str(row["workflow"]).replace("_", " ").title())
+            elapsed = escape(humanize_time(row["last_run"]))
+            total_runs = int(row["total_runs"] or 0)
+            total_items = int(row["total_items"] or 0)
+            accent = accents[idx % len(accents)]
+            # Use border-bottom directly — avoids CSS custom properties (--) which
+            # Streamlit's markdown parser converts to em-dashes, breaking the style.
+            st.markdown(
+                f'<div class="metric-card" style="border-bottom: 4px solid {accent};">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value">{elapsed}</div>'
+                f'<div class="metric-meta">{total_runs} total runs | {total_items} items processed</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 
 def render_actions(actions: list[dict]) -> None:
-    """Render recent actions as a styled feed."""
+    """Render recent actions as a styled feed, one st.markdown call per row."""
     if not actions:
         st.markdown('<div class="empty-panel">No actions recorded yet.</div>', unsafe_allow_html=True)
         return
 
-    rows = []
     for action in actions:
         time_str = action["time"].strftime("%I:%M %p") if action["time"] else "?"
         workflow = escape(str(action.get("workflow", "")).replace("_", " ").title())
@@ -1195,19 +1189,14 @@ def render_actions(actions: list[dict]) -> None:
         status = escape(str(action.get("status", "")))
         detail = escape(str(action.get("detail", "")))
         detail_html = f'<div class="metric-meta">{detail}</div>' if detail else ""
-        rows.append(
-            f"""
-            <div class="feed-row">
-                <div class="feed-time">{escape(time_str)}</div>
-                <div class="workflow-chip">{workflow}</div>
-                <div class="feed-body">
-                    <strong>{action_name}</strong> -> <code>{target}</code> ({status})
-                    {detail_html}
-                </div>
-            </div>
-            """
+        st.markdown(
+            f'<div class="feed-row">'
+            f'<div class="feed-time">{escape(time_str)}</div>'
+            f'<div class="workflow-chip">{workflow}</div>'
+            f'<div class="feed-body"><strong>{action_name}</strong> &rarr; <code>{target}</code> ({status}){detail_html}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
-    st.markdown(f'<div class="feed-list">{"".join(rows)}</div>', unsafe_allow_html=True)
 
 
 _LABEL_COLORS = {
@@ -1226,12 +1215,11 @@ _LABEL_COLORS = {
 
 
 def render_decisions(decisions: list[dict]) -> None:
-    """Render the LLM signal log with label badges and reasoning."""
+    """Render the LLM signal log, one st.markdown call per row."""
     if not decisions:
         st.markdown('<div class="empty-panel">No LLM decisions recorded yet.</div>', unsafe_allow_html=True)
         return
 
-    rows = []
     for dec in decisions:
         time_str = dec["time"].strftime("%b %d %H:%M") if dec["time"] else "?"
         label = dec.get("label", "unknown")
@@ -1240,23 +1228,25 @@ def render_decisions(decisions: list[dict]) -> None:
         workflow = escape(str(dec.get("workflow", "")).replace("_", " ").title())
         item_id = escape(str(dec.get("item_id", ""))[:72])
         reasoning = escape(str(dec.get("reasoning", "")))
-        badge_style = f"display:inline-block;padding:3px 10px;border-radius:999px;background:{color}22;color:{color};font-size:0.78rem;font-weight:900;margin-bottom:6px;"
-        right_col = f'display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:120px;'
-        rows.append(
+        dot_class = "timeline-dot alert" if is_alert else "timeline-dot"
+        badge = (
+            f'<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
+            f'background:{color}33;color:{color};font-size:0.78rem;font-weight:900;">'
+            f'{escape(label.replace("_", " ").title())}</span>'
+        )
+        st.markdown(
             f'<div class="timeline-row">'
-            f'<div class="timeline-dot {"alert" if is_alert else ""}"></div>'
-            f'<div class="timeline-main">'
-            f'<span style="{badge_style}">{escape(label.replace("_"," ").title())}</span>'
-            f'<div style="color:var(--argus-ink);font-size:0.95rem;margin-top:4px;">{reasoning}</div>'
+            f'<div class="{dot_class}"></div>'
+            f'<div class="timeline-main">{badge}'
+            f'<div style="font-size:0.95rem;margin-top:4px;">{reasoning}</div>'
             f'<div class="timeline-meta" style="font-size:0.76rem;margin-top:4px;opacity:0.6;">{item_id}</div>'
             f'</div>'
-            f'<div style="{right_col}">'
+            f'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:120px;">'
             f'<div class="workflow-chip">{workflow}</div>'
             f'<div class="timeline-time">{escape(time_str)}</div>'
-            f'</div>'
-            f'</div>'
+            f'</div></div>',
+            unsafe_allow_html=True,
         )
-    st.markdown(f'<div class="timeline">{"".join(rows)}</div>', unsafe_allow_html=True)
 
 
 def render_run_history(runs: list[dict]) -> None:
