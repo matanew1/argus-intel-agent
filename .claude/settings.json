@@ -8,7 +8,13 @@
       "Bash(echo \"core: $?\")",
       "Bash(.venv/bin/python -m pip install pyflakes -q)",
       "Bash(.venv/bin/python -m pyflakes argus/)",
-      "Bash(.venv/bin/python -m pytest tests/ -q)"
+      "Bash(.venv/bin/python -m pytest tests/ -q)",
+      "Bash(sed -i '' '1s/.*/\"\"\"Classifier for competitor news articles.\"\"\"/' /Users/matanbardugo/Desktop/Programs/argus-intel-agent/argus/classifiers/news.py)",
+      "Bash(sed -i '' '1s/.*/\"\"\"Classifier for competitor page diffs \\(material vs cosmetic changes\\).\"\"\"/' /Users/matanbardugo/Desktop/Programs/argus-intel-agent/argus/classifiers/diff.py)",
+      "Bash(sed -i '' '1s/.*/\"\"\"Classifier for inferring strategic intent from a batch of job postings.\"\"\"/' /Users/matanbardugo/Desktop/Programs/argus-intel-agent/argus/classifiers/jobs.py)",
+      "Bash(sed -i '' '1s/.*/\"\"\"Synthesises the week'\\\\''s signals into a markdown executive digest.\"\"\"/' /Users/matanbardugo/Desktop/Programs/argus-intel-agent/argus/classifiers/digest.py)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(git tag -a v1.1.0 -m 'v1.1.0 — bug fixes + enhanced dashboard *)"
     ]
   }
 }
