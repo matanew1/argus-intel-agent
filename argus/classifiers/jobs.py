@@ -4,7 +4,7 @@ from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from argus.core.logger import get_logger
 
@@ -58,8 +58,12 @@ def classify_job_cluster(
         f"New job postings this cycle:\n{roles_text}\n\n"
         f"Observer's criteria:\n{criteria}"
     )
-    result: JobSignal = llm.with_structured_output(JobSignal).invoke(
-        [SystemMessage(_SYSTEM_PROMPT), HumanMessage(prompt)]
-    )
+    try:
+        result: JobSignal = llm.with_structured_output(JobSignal).invoke(
+            [SystemMessage(_SYSTEM_PROMPT), HumanMessage(prompt)]
+        )
+    except ValidationError as exc:
+        log.warning("Jobs classifier returned invalid label for %s: %s — defaulting to routine_backfill", competitor, exc)
+        result = JobSignal(label="routine_backfill", reasoning="Invalid label from LLM", confidence=0.0)
     log.info("Jobs classifier: %s -> %s (%.2f)", competitor, result.label, result.confidence)
     return result

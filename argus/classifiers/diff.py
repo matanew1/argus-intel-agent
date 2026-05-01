@@ -4,7 +4,7 @@ from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from argus.core.logger import get_logger
 
@@ -51,8 +51,12 @@ def classify_diff(competitor: str, url: str, diff_text: str) -> DiffSignal:
         f"Page: {url}\n\n"
         f"Diff (--- old, +++ new):\n{diff_text[:3000]}"
     )
-    result: DiffSignal = llm.with_structured_output(DiffSignal).invoke(
-        [SystemMessage(_SYSTEM_PROMPT), HumanMessage(prompt)]
-    )
+    try:
+        result: DiffSignal = llm.with_structured_output(DiffSignal).invoke(
+            [SystemMessage(_SYSTEM_PROMPT), HumanMessage(prompt)]
+        )
+    except ValidationError as exc:
+        log.warning("Diff classifier returned invalid label for %s: %s — defaulting to cosmetic", url, exc)
+        result = DiffSignal(label="cosmetic", reasoning="Invalid label from LLM", summary="Classification failed", confidence=0.0)
     log.info("Diff classifier: %s %s -> %s (%.2f)", competitor, url, result.label, result.confidence)
     return result
