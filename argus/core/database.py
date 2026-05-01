@@ -4,8 +4,11 @@ from contextlib import contextmanager
 from importlib import import_module
 from typing import Generator
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
+load_dotenv()
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
