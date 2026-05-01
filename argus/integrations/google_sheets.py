@@ -22,12 +22,12 @@ def append_signal_row(
     source_url: str,
     detected_at: str,
 ) -> None:
-    """Append one signal row to Sheet1 columns A-E (Detected At, Competitor, Label, Reasoning, Source URL)."""
+    """Append one signal row to the first sheet, columns A-E (Detected At, Competitor, Label, Reasoning, Source URL)."""
     service = _get_service()
     values = [[detected_at, competitor, label, reasoning, source_url]]
     service.spreadsheets().values().append(
         spreadsheetId=sheet_id,
-        range="Sheet1!A:E",
+        range="A:E",
         valueInputOption="USER_ENTERED",
         body={"values": values},
     ).execute()
