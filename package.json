@@ -1,9 +1,0 @@
-{
-  "name": "argus-intel-agent",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Always-on competitive intelligence agent.",
-  "scripts": {
-    "release": "npm version"
-  }
-}
