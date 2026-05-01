@@ -25,6 +25,17 @@ def is_seen(fingerprint: str) -> bool:
         ) is not None
 
 
+def get_seen_source_url(fingerprint: str) -> str | None:
+    """Return the stored source_url for a seen fingerprint, if present."""
+    with get_session() as session:
+        row = (
+            session.query(SeenItem.source_url)
+            .filter_by(fingerprint=fingerprint)
+            .first()
+        )
+        return row[0] if row else None
+
+
 def mark_seen(
     fingerprint: str,
     workflow: str,
