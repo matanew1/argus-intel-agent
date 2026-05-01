@@ -26,14 +26,12 @@ _CFG = {
 def test_material_change_triggers_all_actions(
     mock_cfg, mock_cal, mock_ch, mock_dm, mock_store, mock_snap, mock_classify, mock_fetch
 ):
-    from argus.core.models import PageSnapshot
     from argus.classifiers.diff import DiffSignal
     from argus.workflows.pricing_watch import PricingWatchWorkflow
 
     mock_cfg.instance.return_value.get.return_value = _CFG
     mock_fetch.return_value = "new page text"
-    old = PageSnapshot(url="https://openai.com/pricing", content_hash="oldhash", content_text="old text")
-    mock_snap.return_value = old
+    mock_snap.return_value = {"content_hash": "oldhash", "content_text": "old text"}
     mock_classify.return_value = DiffSignal(
         label="material", reasoning="Price went up.", summary="$20 to $30.", confidence=0.95
     )
@@ -59,9 +57,7 @@ def test_no_change_skips_everything(mock_cfg, mock_snap, mock_fetch):
     mock_cfg.instance.return_value.get.return_value = _CFG
     text = "unchanged page text"
     mock_fetch.return_value = text
-    mock_snap.return_value = PageSnapshot(
-        url="https://openai.com/pricing", content_hash=content_hash(text), content_text=text
-    )
+    mock_snap.return_value = {"content_hash": content_hash(text), "content_text": text}
 
     wf = PricingWatchWorkflow()
     run_log = wf.run(dry_run=False)
