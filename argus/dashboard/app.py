@@ -1,10 +1,16 @@
 """Streamlit dashboard — last run per workflow, last 20 actions, error rate."""
 import json
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import func
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from argus.core.database import SessionLocal
 from argus.core.models import RunLog
