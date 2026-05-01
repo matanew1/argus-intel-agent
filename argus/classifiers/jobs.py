@@ -1,3 +1,4 @@
+"""Classifier for inferring strategic intent from a batch of job postings."""
 import os
 from typing import Literal
 
@@ -9,7 +10,7 @@ from argus.core.logger import get_logger
 
 log = get_logger(__name__)
 
-_SYSTEM = """\
+_SYSTEM_PROMPT = """\
 You are a competitive intelligence analyst reading job postings to infer strategic intent.
 
 Respond ONLY with valid JSON matching the schema:
@@ -23,15 +24,29 @@ Labels:
 """
 
 
-class JobJudgment(BaseModel):
+class JobSignal(BaseModel):
+    """Structured output returned by the job cluster classifier."""
+
     label: Literal["infra_scaling", "entering_new_market", "building_ai_team", "routine_backfill"]
     reasoning: str
     confidence: float
 
 
-def judge_job_cluster(
+def classify_job_cluster(
     competitor: str, new_roles: list[dict], criteria: str
-) -> JobJudgment:
+) -> JobSignal:
+    """Classify a batch of new job postings as a single strategic signal.
+
+    Batching is intentional — individual roles are noise; clusters reveal intent.
+
+    Args:
+        competitor: Competitor display name.
+        new_roles: List of dicts with ``title`` and ``location`` keys (max 25 used).
+        criteria: Plain-English observer criteria from config.yaml.
+
+    Returns:
+        A JobSignal with label, reasoning, and confidence score.
+    """
     model = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
     llm = ChatMistralAI(model=model, temperature=0)
     roles_text = "\n".join(
@@ -43,8 +58,8 @@ def judge_job_cluster(
         f"New job postings this cycle:\n{roles_text}\n\n"
         f"Observer's criteria:\n{criteria}"
     )
-    result: JobJudgment = llm.with_structured_output(JobJudgment).invoke(
-        [SystemMessage(_SYSTEM), HumanMessage(prompt)]
+    result: JobSignal = llm.with_structured_output(JobSignal).invoke(
+        [SystemMessage(_SYSTEM_PROMPT), HumanMessage(prompt)]
     )
-    log.info("Jobs judge: %s → %s (%.2f)", competitor, result.label, result.confidence)
+    log.info("Jobs classifier: %s -> %s (%.2f)", competitor, result.label, result.confidence)
     return result

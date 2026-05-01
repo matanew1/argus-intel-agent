@@ -1,3 +1,4 @@
+"""Web scraping utilities: page fetching, hashing, diffing, and job listing extraction."""
 import difflib
 import hashlib
 
@@ -13,7 +14,7 @@ _HEADERS = {"User-Agent": "ArgusIntelBot/1.0"}
 
 
 def fetch_page_text(url: str) -> str:
-    """Fetch URL, strip boilerplate HTML, return normalized text."""
+    """Fetch URL, strip boilerplate HTML tags, and return normalised whitespace-collapsed text."""
     resp = requests.get(url, timeout=20, headers=_HEADERS)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -23,11 +24,12 @@ def fetch_page_text(url: str) -> str:
 
 
 def content_hash(text: str) -> str:
+    """Return the SHA-256 hex digest of text, used to detect page changes."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def unified_diff(old_text: str, new_text: str, context_lines: int = 3) -> str:
-    """Return unified diff string. Empty string means no change."""
+    """Return a unified diff string between old_text and new_text. Empty string means no change."""
     old_lines = old_text.splitlines(keepends=True)
     new_lines = new_text.splitlines(keepends=True)
     diff = list(
@@ -37,7 +39,11 @@ def unified_diff(old_text: str, new_text: str, context_lines: int = 3) -> str:
 
 
 def scrape_jobs_html(url: str) -> list[dict]:
-    """Heuristic HTML scrape for job listings. Returns [{id, title, location}]."""
+    """Heuristic HTML scrape for job listings. Returns list of ``{id, title, location}`` dicts.
+
+    Finds ``<a>`` tags whose href contains job-related path segments
+    (/job, /career, /position, /role, /opening, /vacancy).
+    """
     try:
         resp = requests.get(url, timeout=20, headers=_HEADERS)
         resp.raise_for_status()
@@ -58,7 +64,7 @@ def scrape_jobs_html(url: str) -> list[dict]:
 
 
 def scrape_jobs_rss(rss_url: str) -> list[dict]:
-    """Parse RSS feed for job listings."""
+    """Parse an RSS feed for job listings. Returns list of ``{id, title, location}`` dicts."""
     feed = feedparser.parse(rss_url)
     jobs = [
         {

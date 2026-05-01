@@ -1,21 +1,32 @@
 """Workflow 3 — Pricing & Site Change Watch: runs daily at 8am."""
-import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from argus.core.database import get_session
 from argus.core.logger import get_logger
 from argus.core.models import PageSnapshot, RunLog
 from argus.integrations.scraper import content_hash, fetch_page_text, unified_diff
-from argus.judges.diff import judge_diff
+from argus.classifiers.diff import classify_diff
 from argus.workflows.base import BaseWorkflow
 
 log = get_logger(__name__)
 
 
 class PricingWatchWorkflow(BaseWorkflow):
+    """Detect and classify changes on competitor pricing and product pages.
+
+    On first visit a baseline snapshot is stored. Subsequent runs compare the
+    current page hash against the snapshot; if different, a unified diff is sent
+    to the LLM classifier.
+
+    Actions taken per label:
+    - ``material`` → Slack DM to owner + channel post + Google Calendar event.
+    - ``cosmetic`` → logged and skipped.
+    """
+
     name = "pricing_watch"
 
     def _execute(self, cfg: dict, run_log: RunLog, dry_run: bool) -> None:
+        """Process every pricing URL for every competitor."""
         channel_id  = cfg["notifications"]["slack_channel"]
         dm_user     = cfg["notifications"]["slack_dm_user"]
         calendar_id = cfg["notifications"]["calendar_id"]
@@ -33,6 +44,7 @@ class PricingWatchWorkflow(BaseWorkflow):
         channel_id: str, dm_user: str, calendar_id: str,
         run_log: RunLog, dry_run: bool,
     ) -> None:
+        """Fetch the page, diff against the last snapshot, classify the change, and act."""
         new_text = self._safe_action(fetch_page_text, run_log, "fetch_page_text", url)
         if new_text is None:
             return
@@ -50,7 +62,7 @@ class PricingWatchWorkflow(BaseWorkflow):
             return
 
         diff = unified_diff(old_snapshot.content_text, new_text)
-        judgment = self._safe_action(judge_diff, run_log, "judge_diff", competitor, url, diff)
+        judgment = self._safe_action(classify_diff, run_log, "classify_diff", competitor, url, diff)
         if judgment is None:
             return
 
@@ -64,7 +76,7 @@ class PricingWatchWorkflow(BaseWorkflow):
                 f">{judgment.summary}"
             )
             self._safe_action(self._send_dm, run_log, "slack_dm", dm_user, alert_text)
-            self._safe_action(self._post_channel, run_log, "slack_channel", channel_id, alert_text)
+            self._safe_action(self._post_to_slack, run_log, "slack_channel", channel_id, alert_text)
             self._safe_action(
                 self._create_pricing_event, run_log, "calendar_event",
                 calendar_id, competitor, url, judgment.summary,
@@ -80,44 +92,34 @@ class PricingWatchWorkflow(BaseWorkflow):
 
     @staticmethod
     def _get_snapshot(url: str) -> PageSnapshot | None:
+        """Return the most recent PageSnapshot for url, or None if not yet stored."""
         with get_session() as session:
             return session.query(PageSnapshot).filter_by(url=url).first()
 
     @staticmethod
     def _store_snapshot(url: str, hash_val: str, text: str) -> None:
+        """Insert or update the PageSnapshot row for url."""
         with get_session() as session:
             snap = session.query(PageSnapshot).filter_by(url=url).first()
             if snap:
                 snap.content_hash = hash_val
                 snap.content_text = text
-                snap.captured_at = datetime.utcnow()
+                snap.captured_at = datetime.now(timezone.utc)
             else:
                 session.add(PageSnapshot(url=url, content_hash=hash_val, content_text=text))
 
     @staticmethod
-    def _send_dm(user_id: str, text: str) -> None:
-        from argus.integrations.slack_client import send_dm
-        send_dm(user_id, text)
-
-    @staticmethod
-    def _post_channel(channel_id: str, text: str) -> None:
-        from argus.integrations.slack_client import post_to_channel
-        post_to_channel(channel_id, text)
-
-    @staticmethod
     def _create_pricing_event(calendar_id, competitor, url, summary) -> None:
+        """Create a 30-minute calendar event for a detected pricing change."""
         from argus.integrations.google_calendar import create_strategy_event
         create_strategy_event(
             calendar_id,
             f"Pricing change: {competitor}",
             f"{summary}\n\nPage: {url}",
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             30,
         )
 
 
 if __name__ == "__main__":
-    from argus.core.database import init_db
-    dry = os.getenv("DRY_RUN", "false").lower() == "true"
-    init_db()
-    PricingWatchWorkflow().run(dry_run=dry)
+    PricingWatchWorkflow.main()
