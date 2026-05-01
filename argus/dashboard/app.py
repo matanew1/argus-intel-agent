@@ -97,17 +97,25 @@ def load_recent_actions(n: int = 20) -> list[dict]:
 
 
 @st.cache_data(ttl=30)
-def load_error_logs(hours: int = 24) -> list[RunLog]:
-    """Return RunLog rows from the last N hours that contain at least one error."""
+def load_error_logs(hours: int = 24) -> list[dict]:
+    """Return RunLog rows from the last N hours as plain dicts (avoids detached-instance errors)."""
     session = SessionLocal()
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-        return (
+        rows = (
             session.query(RunLog)
             .filter(RunLog.trigger_time >= cutoff)
             .order_by(RunLog.trigger_time.desc())
             .all()
         )
+        return [
+            {
+                "workflow":     r.workflow,
+                "trigger_time": r.trigger_time,
+                "errors":       r.errors,
+            }
+            for r in rows
+        ]
     except SQLAlchemyError:
         session.rollback()
         return []
@@ -1232,24 +1240,21 @@ def render_decisions(decisions: list[dict]) -> None:
         workflow = escape(str(dec.get("workflow", "")).replace("_", " ").title())
         item_id = escape(str(dec.get("item_id", ""))[:72])
         reasoning = escape(str(dec.get("reasoning", "")))
+        badge_style = f"display:inline-block;padding:3px 10px;border-radius:999px;background:{color}22;color:{color};font-size:0.78rem;font-weight:900;margin-bottom:6px;"
+        right_col = f'display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:120px;'
         rows.append(
-            f"""
-            <div class="timeline-row">
-                <div class="timeline-dot {'alert' if is_alert else ''}"></div>
-                <div class="timeline-main">
-                    <span style="display:inline-block;padding:3px 10px;border-radius:999px;
-                        background:{color}22;color:{color};font-size:0.78rem;font-weight:900;margin-bottom:6px;">
-                        {escape(label.replace('_',' ').title())}
-                    </span>
-                    <div style="color:var(--argus-ink);font-size:0.95rem;">{reasoning}</div>
-                    <div class="timeline-meta" style="font-size:0.76rem;margin-top:4px;opacity:0.6;">{item_id}</div>
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:120px;">
-                    <div class="workflow-chip">{workflow}</div>
-                    <div class="timeline-time">{escape(time_str)}</div>
-                </div>
-            </div>
-            """
+            f'<div class="timeline-row">'
+            f'<div class="timeline-dot {"alert" if is_alert else ""}"></div>'
+            f'<div class="timeline-main">'
+            f'<span style="{badge_style}">{escape(label.replace("_"," ").title())}</span>'
+            f'<div style="color:var(--argus-ink);font-size:0.95rem;margin-top:4px;">{reasoning}</div>'
+            f'<div class="timeline-meta" style="font-size:0.76rem;margin-top:4px;opacity:0.6;">{item_id}</div>'
+            f'</div>'
+            f'<div style="{right_col}">'
+            f'<div class="workflow-chip">{workflow}</div>'
+            f'<div class="timeline-time">{escape(time_str)}</div>'
+            f'</div>'
+            f'</div>'
         )
     st.markdown(f'<div class="timeline">{"".join(rows)}</div>', unsafe_allow_html=True)
 
@@ -1298,15 +1303,15 @@ def render_run_history(runs: list[dict]) -> None:
                         st.code(e["traceback"], language="python")
 
 
-def render_errors(error_logs: list[RunLog]) -> None:
+def render_errors(error_logs: list[dict]) -> None:
     """Render the error log section."""
     has_errors = False
     for log in error_logs:
-        errors = _json_array(log.errors)
+        errors = _json_array(log["errors"])
         if errors:
             has_errors = True
-            stamp = log.trigger_time.strftime("%Y-%m-%d %H:%M")
-            title = f"{log.workflow.replace('_',' ').title()} @ {stamp} - {len(errors)} error(s)"
+            stamp = log["trigger_time"].strftime("%Y-%m-%d %H:%M")
+            title = f"{log['workflow'].replace('_',' ').title()} @ {stamp} — {len(errors)} error(s)"
             with st.expander(title):
                 for err in errors:
                     st.error(err.get("error", "Unknown error"))
