@@ -6,7 +6,7 @@ An always-on competitive intelligence agent that watches competitor companies an
 
 | Workflow | Schedule | Action |
 |---|---|---|
-| **News Watch** | Every 2 hours | Classifies news → Calendar event (funding/launch) or Slack alert (controversy) |
+| **News Watch** | Every 2 hours at :17 UTC | Classifies news → Calendar event (funding/launch) or Slack alert (controversy) |
 | **Job Watch** | Daily 9am UTC | Clusters new roles → Google Sheet row for non-routine signals |
 | **Pricing Watch** | Daily 8am UTC | Diffs competitor pages → Slack DM + Calendar event for material changes |
 | **Weekly Digest** | Friday 4pm UTC | Synthesizes week's signals → Email + Slack TL;DR |
@@ -131,9 +131,11 @@ pytest tests/ -v
 ## Configuration
 
 Edit `config.yaml` to:
-- Add or remove competitors (name, news query, careers URL, pricing URLs)
+- Add or remove competitors (name, news query, careers URL, optional LinkedIn RSS URL, pricing URLs)
 - Update `what_i_care_about` criteria in plain English — passed to every LLM classifier
 - Change notification IDs (Slack channel, calendar, sheet, digest email)
+
+For job watch, set `linkedin_rss` to a feed URL when available. Leave it blank to fall back to scraping `careers_url`.
 
 Changes are picked up on the next workflow run with no restart needed (ConfigLoader watches the file).
 

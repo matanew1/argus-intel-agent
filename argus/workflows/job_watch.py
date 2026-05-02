@@ -29,8 +29,9 @@ class JobWatchWorkflow(BaseWorkflow):
         """Fetch, deduplicate, classify, and record job signals for every competitor."""
         criteria = cfg["criteria"]["what_i_care_about"]
         sheet_id = cfg["notifications"]["google_sheet_id"]
+        competitors = cfg.get("competitors", [])
 
-        for competitor in cfg["competitors"]:
+        for competitor in competitors:
             raw_jobs = self._fetch_jobs(competitor)
             run_log.items_processed += len(raw_jobs)
 

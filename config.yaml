@@ -2,11 +2,13 @@ competitors:
   - name: "OpenAI"
     news_query: "OpenAI funding product launch announcement"
     careers_url: "https://openai.com/careers"
+    linkedin_rss: ""
     pricing_urls:
       - "https://openai.com/api/pricing"
   - name: "Anthropic"
     news_query: "Anthropic Claude AI announcement funding"
     careers_url: "https://www.anthropic.com/careers"
+    linkedin_rss: ""
     pricing_urls:
       - "https://www.anthropic.com/pricing"
 

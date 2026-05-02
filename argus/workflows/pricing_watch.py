@@ -30,8 +30,9 @@ class PricingWatchWorkflow(BaseWorkflow):
         channel_id  = cfg["notifications"]["slack_channel"]
         dm_user     = cfg["notifications"]["slack_dm_user"]
         calendar_id = cfg["notifications"]["calendar_id"]
+        competitors = cfg.get("competitors", [])
 
-        for competitor in cfg["competitors"]:
+        for competitor in competitors:
             for url in competitor.get("pricing_urls", []):
                 run_log.items_processed += 1
                 self._process_url(

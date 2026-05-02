@@ -31,7 +31,8 @@ Dry run:
 Actions -> Job Watch -> Run workflow -> dry_run: true
 
 Check for:
-- Scraped X job links from the configured careers URL.
+- RSS returned X jobs from the configured LinkedIn RSS URL, if `linkedin_rss` is set.
+- Otherwise, scraped X job links from the configured careers URL.
 - Jobs classifier: OpenAI -> building_ai_team / routine_backfill / etc.
 - routine_backfill or dry_run -> skipping sheet write.
 - Job Watch done -> X items, 0 action(s).

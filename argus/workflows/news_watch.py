@@ -33,8 +33,9 @@ class NewsWatchWorkflow(BaseWorkflow):
         criteria    = cfg["criteria"]["what_i_care_about"]
         channel_id  = cfg["notifications"]["slack_channel"]
         calendar_id = cfg["notifications"]["calendar_id"]
+        competitors = cfg.get("competitors", [])
 
-        for competitor in cfg["competitors"]:
+        for competitor in competitors:
             articles = self._safe_action(
                 fetch_news, run_log, "fetch_news", competitor["news_query"]
             ) or []
