@@ -1,11 +1,13 @@
 """Streamlit dashboard for Argus workflow health and activity."""
 import base64
+from collections import Counter
 import html
 import json
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -21,6 +23,7 @@ from argus.core.models import PageSnapshot, RunLog, SeenItem
 
 LOGO_PATH = ROOT_DIR / "assets" / "logo.png"
 PAGE_ICON = str(LOGO_PATH) if LOGO_PATH.exists() else "A"
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 st.set_page_config(page_title="Argus", layout="wide", page_icon=PAGE_ICON)
 
@@ -70,6 +73,7 @@ _PIPELINE_STEPS = [
     ("07", "Action dispatched", "Actionable signals create Slack, Calendar, Sheets, or email artifacts.", "External apps"),
     ("08", "Proof surfaces", "Dashboard reads run_log, seen_items, and page_snapshots for demo evidence.", "Streamlit"),
 ]
+_ACTION_COLORS = ["#2563eb", "#0d9488", "#d97706", "#7c3aed", "#dc2626", "#475569"]
 
 
 @st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
@@ -415,6 +419,14 @@ def format_dt(dt: datetime | None) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def format_dt_israel(dt: datetime | None) -> str:
+    if dt is None or pd.isna(dt):
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ISRAEL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+
+
 def status_profile(err: dict) -> dict:
     if err.get("state") == "missing_tables":
         return {
@@ -504,6 +516,7 @@ def load_scheduler_manifest() -> pd.DataFrame:
                 "cron": cron_match.group(1).strip() if cron_match else "",
                 "command": command_match.group(1).strip() if command_match else "",
                 "file": item["file"],
+                "display_time": "Dashboard shows UTC and Israel time side-by-side",
             }
         )
     return pd.DataFrame(rows)
@@ -525,7 +538,7 @@ def artifact_rows(actions_30d: list[dict], snapshots: pd.DataFrame, seen_summary
                 "artifact": label,
                 "system": system,
                 "status": "Observed" if latest else "Needs real run",
-                "latest": format_dt(latest["time"]) if latest else "",
+                "latest_israel": format_dt_israel(latest["time"]) if latest else "",
                 "proof": _artifact_proof(latest) if latest else "",
             }
         )
@@ -536,7 +549,7 @@ def artifact_rows(actions_30d: list[dict], snapshots: pd.DataFrame, seen_summary
                 "artifact": "Pricing snapshots",
                 "system": "page_snapshots",
                 "status": "Needs baseline run",
-                "latest": "",
+                "latest_israel": "",
                 "proof": "",
             }
         )
@@ -547,7 +560,7 @@ def artifact_rows(actions_30d: list[dict], snapshots: pd.DataFrame, seen_summary
                 "artifact": "Pricing snapshots",
                 "system": "page_snapshots",
                 "status": "Observed",
-                "latest": format_dt(latest_snapshot["captured_at"]),
+                "latest_israel": format_dt_israel(latest_snapshot["captured_at"]),
                 "proof": latest_snapshot["url"],
             }
         )
@@ -558,7 +571,7 @@ def artifact_rows(actions_30d: list[dict], snapshots: pd.DataFrame, seen_summary
                 "artifact": "Dedup rows",
                 "system": "seen_items",
                 "status": "Needs news/job run",
-                "latest": "",
+                "latest_israel": "",
                 "proof": "",
             }
         )
@@ -570,7 +583,7 @@ def artifact_rows(actions_30d: list[dict], snapshots: pd.DataFrame, seen_summary
                 "artifact": "Dedup rows",
                 "system": "seen_items",
                 "status": "Observed",
-                "latest": format_dt(latest_seen),
+                "latest_israel": format_dt_israel(latest_seen),
                 "proof": f"{total_seen} seen item(s)",
             }
         )
@@ -860,6 +873,35 @@ def render_styles() -> None:
             gap: 0.4rem;
             white-space: nowrap;
         }
+        .argus-clock-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.55rem;
+            margin-top: 0.1rem;
+        }
+        .argus-clock {
+            min-width: 10.5rem;
+            padding: 0.55rem 0.68rem;
+            border: 1px solid var(--argus-border);
+            border-radius: 0.7rem;
+            background: var(--argus-panel);
+            box-shadow: 0 6px 18px rgba(18, 36, 58, 0.04);
+        }
+        .argus-clock span {
+            display: block;
+            color: var(--argus-muted);
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .argus-clock strong {
+            display: block;
+            margin-top: 0.2rem;
+            color: var(--argus-text);
+            font-size: 0.84rem;
+            font-weight: 760;
+        }
         .argus-pill {
             display: inline-flex;
             align-items: center;
@@ -875,6 +917,113 @@ def render_styles() -> None:
         .argus-timestamp {
             color: var(--argus-muted);
             font-size: 0.78rem;
+        }
+        .argus-chart-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+            gap: 1rem;
+            align-items: stretch;
+            margin: 0.7rem 0 1rem;
+        }
+        .argus-chart-panel {
+            min-height: 18.5rem;
+            background: var(--argus-panel);
+            border: 1px solid var(--argus-border);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            box-shadow: 0 7px 20px rgba(18, 36, 58, 0.04);
+        }
+        .argus-chart-title {
+            color: var(--argus-text);
+            font-size: 0.95rem;
+            font-weight: 780;
+            margin-bottom: 0.18rem;
+        }
+        .argus-chart-caption {
+            color: var(--argus-muted);
+            font-size: 0.82rem;
+            font-weight: 500;
+            margin-bottom: 0.85rem;
+        }
+        .argus-donut-layout {
+            display: grid;
+            grid-template-columns: 11.5rem minmax(0, 1fr);
+            gap: 1rem;
+            align-items: center;
+            min-height: 13rem;
+        }
+        .argus-donut {
+            position: relative;
+            width: 11rem;
+            height: 11rem;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 10px 22px rgba(18, 36, 58, 0.08);
+        }
+        .argus-donut::after {
+            content: "";
+            position: absolute;
+            inset: 2.5rem;
+            border-radius: 50%;
+            background: var(--argus-panel);
+            box-shadow: inset 0 0 0 1px var(--argus-border);
+        }
+        .argus-donut-center {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            pointer-events: none;
+        }
+        .argus-donut-center strong {
+            color: var(--argus-text);
+            font-size: 1.45rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .argus-donut-center span {
+            color: var(--argus-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.22rem;
+        }
+        .argus-legend {
+            display: grid;
+            gap: 0.48rem;
+        }
+        .argus-legend-row {
+            display: grid;
+            grid-template-columns: 0.8rem minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.48rem;
+            color: var(--argus-text);
+            font-size: 0.84rem;
+            font-weight: 620;
+        }
+        .argus-legend-swatch {
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 50%;
+        }
+        .argus-legend-count {
+            color: var(--argus-muted);
+            font-weight: 760;
+        }
+        .argus-empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 13rem;
+            border: 1px dashed var(--argus-border-strong);
+            border-radius: 0.7rem;
+            color: var(--argus-muted);
+            font-weight: 650;
+            background: var(--argus-panel-soft);
         }
         .stTabs [data-baseweb="tab-list"] {
             gap: 0.35rem;
@@ -918,11 +1067,13 @@ def render_styles() -> None:
         @media (max-width: 900px) {
             .argus-header { align-items: flex-start; flex-direction: column; }
             .argus-header-meta { align-items: flex-start; }
+            .argus-clock-grid, .argus-chart-grid { grid-template-columns: 1fr; }
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
             .argus-logo img { width: 168px; max-width: 58vw; }
             .argus-brand { align-items: flex-start; }
+            .argus-donut-layout { grid-template-columns: 1fr; }
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: 1fr; }
             .argus-pipeline-row { grid-template-columns: 2.8rem minmax(0, 1fr); }
             .argus-step-system { grid-column: 2; justify-self: start; }
@@ -947,28 +1098,39 @@ def summary_table(summary_df: pd.DataFrame) -> pd.DataFrame:
     if summary_df.empty:
         return summary_df
     table = summary_df.copy()
-    table["last_run"] = table["last_run"].apply(format_dt)
+    table["last_run_israel"] = summary_df["last_run"].apply(format_dt_israel)
+    table["last_run_utc"] = summary_df["last_run"].apply(format_dt)
     table["last_seen"] = summary_df["last_run"].apply(humanize_time)
-    return table[["workflow", "last_seen", "last_run", "total_runs", "total_items"]]
+    return table[
+        ["workflow", "last_seen", "last_run_israel", "last_run_utc", "total_runs", "total_items"]
+    ]
 
 
 def recent_runs_table(recent_runs: pd.DataFrame) -> pd.DataFrame:
     if recent_runs.empty:
-        return pd.DataFrame(columns=["workflow", "trigger_time", "items", "duration", "errors", "actions"])
+        return pd.DataFrame(
+            columns=["workflow", "israel_time", "utc_time", "items", "duration", "errors", "actions"]
+        )
     table = recent_runs.copy()
-    table["trigger_time"] = table["trigger_time"].apply(format_dt)
+    table["israel_time"] = table["trigger_time"].apply(format_dt_israel)
+    table["utc_time"] = table["trigger_time"].apply(format_dt)
     table["errors"] = table["errors"].apply(lambda raw: len(_json_array(raw)))
     table["actions"] = table["actions_taken"].apply(lambda raw: len(_json_array(raw)))
     table = table.rename(columns={"items_processed": "items", "duration_seconds": "duration"})
-    return table[["workflow", "trigger_time", "items", "duration", "errors", "actions"]]
+    return table[["workflow", "israel_time", "utc_time", "items", "duration", "errors", "actions"]]
 
 
 def runs_since_table(runs: list[dict]) -> pd.DataFrame:
     table = to_table(runs, date_fields=("trigger_time",))
     if table.empty:
-        return pd.DataFrame(columns=["workflow", "trigger_time", "items", "decisions", "actions", "errors"])
+        return pd.DataFrame(
+            columns=["workflow", "israel_time", "utc_time", "items", "decisions", "actions", "errors"]
+        )
+    original_times = [row["trigger_time"] for row in runs]
+    table["israel_time"] = [format_dt_israel(value) for value in original_times]
+    table["utc_time"] = [format_dt(value) for value in original_times]
     table = table.rename(columns={"items_processed": "items"})
-    return table[["workflow", "trigger_time", "items", "decisions", "actions", "errors"]]
+    return table[["workflow", "israel_time", "utc_time", "items", "decisions", "actions", "errors"]]
 
 
 def seen_summary_table(seen_summary: pd.DataFrame) -> pd.DataFrame:
@@ -1039,11 +1201,106 @@ def render_metrics(totals: dict, error_rate: dict) -> None:
     st.markdown(f'<div class="argus-kpi-grid">{body}</div>', unsafe_allow_html=True)
 
 
+def render_action_pie(actions_30d: list[dict]) -> None:
+    counts = Counter(row["action"] or "unknown" for row in actions_30d)
+    if not counts:
+        st.markdown('<div class="argus-empty-state">No external actions recorded yet</div>', unsafe_allow_html=True)
+        return
+
+    top_counts = counts.most_common(5)
+    other_count = sum(counts.values()) - sum(count for _, count in top_counts)
+    if other_count:
+        top_counts.append(("other", other_count))
+
+    total = sum(count for _, count in top_counts)
+    start = 0.0
+    segments = []
+    legend_rows = []
+    for index, (name, count) in enumerate(top_counts):
+        color = _ACTION_COLORS[index % len(_ACTION_COLORS)]
+        end = start + (count / total * 100)
+        segments.append(f"{color} {start:.2f}% {end:.2f}%")
+        legend_rows.append(
+            (
+                '<div class="argus-legend-row">'
+                f'<span class="argus-legend-swatch" style="background:{color};"></span>'
+                f'<span>{html.escape(name)}</span>'
+                f'<span class="argus-legend-count">{format_number(count)}</span>'
+                '</div>'
+            )
+        )
+        start = end
+
+    gradient = ", ".join(segments)
+    legend = "".join(legend_rows)
+    st.markdown(
+        (
+            '<div class="argus-chart-panel">'
+            '<div class="argus-chart-title">Action Pie Stats</div>'
+            '<div class="argus-chart-caption">External artifacts grouped by action type for the last 30 days.</div>'
+            '<div class="argus-donut-layout">'
+            f'<div class="argus-donut" style="background: conic-gradient({gradient});">'
+            '<div class="argus-donut-center">'
+            f'<strong>{format_number(total)}</strong><span>actions</span>'
+            '</div>'
+            '</div>'
+            f'<div class="argus-legend">{legend}</div>'
+            '</div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_operational_charts(
+    summary_df: pd.DataFrame,
+    runs_48h: list[dict],
+    actions_30d: list[dict],
+) -> None:
+    left, right = st.columns([1.12, 0.88])
+    with left:
+        render_section("Run Volume Graph", "Recorded executions by workflow.")
+        if summary_df.empty:
+            st.info("No workflow run volume recorded yet.")
+        else:
+            chart_df = summary_df[["workflow", "total_runs"]].copy()
+            chart_df["total_runs"] = chart_df["total_runs"].fillna(0).astype(int)
+            chart_df = chart_df.sort_values("total_runs", ascending=False)
+            st.bar_chart(chart_df, x="workflow", y="total_runs", height=285, width="stretch")
+
+    with right:
+        render_action_pie(actions_30d)
+
+    render_section("48h Item Trend", "Items processed over time, converted to Israel time on the x-axis.")
+    if not runs_48h:
+        st.info("No 48h trend data recorded yet.")
+        return
+
+    trend = pd.DataFrame(runs_48h)
+    if trend.empty or "trigger_time" not in trend:
+        st.info("No 48h trend data recorded yet.")
+        return
+
+    trend["trigger_time"] = pd.to_datetime(trend["trigger_time"], utc=True)
+    trend["israel_hour"] = trend["trigger_time"].dt.floor("h").dt.tz_convert(ISRAEL_TZ)
+    trend["items_processed"] = trend["items_processed"].fillna(0).astype(int)
+    trend = (
+        trend.groupby(["israel_hour", "workflow"], as_index=False)["items_processed"]
+        .sum()
+        .sort_values("israel_hour")
+    )
+    pivot = trend.pivot(index="israel_hour", columns="workflow", values="items_processed").fillna(0)
+    pivot.index = pivot.index.strftime("%m-%d %H:%M")
+    st.line_chart(pivot, height=280, width="stretch")
+
+
 def render_header(profile: dict) -> None:
     logo = logo_data_uri(str(LOGO_PATH))
     level = html.escape(profile["level"])
     label = html.escape(profile["label"])
-    generated_at = html.escape(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    now_utc = datetime.now(timezone.utc)
+    generated_at = html.escape(now_utc.strftime("%Y-%m-%d %H:%M UTC"))
+    israel_at = html.escape(now_utc.astimezone(ISRAEL_TZ).strftime("%Y-%m-%d %H:%M %Z"))
     if logo:
         logo_markup = f'<img src="{logo}" alt="Argus logo">'
     else:
@@ -1059,7 +1316,10 @@ def render_header(profile: dict) -> None:
             '</div>'
             '<div class="argus-header-meta">'
             f'<div class="argus-pill"><span class="argus-dot {level}"></span>{label}</div>'
-            f'<div class="argus-timestamp">Updated {generated_at}</div>'
+            '<div class="argus-clock-grid">'
+            f'<div class="argus-clock"><span>Israel time</span><strong>{israel_at}</strong></div>'
+            f'<div class="argus-clock"><span>UTC</span><strong>{generated_at}</strong></div>'
+            '</div>'
             '</div>'
             '</div>'
         ),
@@ -1110,7 +1370,7 @@ def render_architecture() -> None:
           digest -> slack;
         }
         """,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -1135,19 +1395,55 @@ def render_pipeline_events() -> None:
     )
 
 
-def render_demo(
-    scheduler_df: pd.DataFrame,
+def render_command_center(
+    summary_df: pd.DataFrame,
+    recent_runs: pd.DataFrame,
+    runs_48h: list[dict],
+    actions_30d: list[dict],
+) -> None:
+    render_operational_charts(summary_df, runs_48h, actions_30d)
+
+    render_section("Workflow Summary", "Last observed run and cumulative volume by workflow.")
+    if summary_df.empty:
+        st.info("No workflow runs recorded yet.")
+    else:
+        st.dataframe(summary_table(summary_df), width="stretch", hide_index=True)
+
+    render_section("Recent Runs", "Latest execution windows with Israel time, item counts, actions, and errors.")
+    recent_table = recent_runs_table(recent_runs)
+    if recent_table.empty:
+        st.info("No recent runs recorded yet.")
+    else:
+        st.dataframe(recent_table, width="stretch", hide_index=True)
+
+
+def render_flow(scheduler_df: pd.DataFrame) -> None:
+    render_section("Deterministic Flow Chart", "The same control path every scheduled workflow follows.")
+    render_pipeline_events()
+
+    render_section("Architecture Graph", "Scheduler, workflows, classifier, database state, and artifact outputs.")
+    render_architecture()
+
+    render_section("Scheduler Proof", "Cron definitions read from the repository workflow files.")
+    st.dataframe(scheduler_df, width="stretch", hide_index=True)
+
+
+def render_evidence(
     run_bounds: dict,
     runs_48h: list[dict],
     artifacts: pd.DataFrame,
     snapshots: pd.DataFrame,
     seen_summary: pd.DataFrame,
+    decisions: list[dict],
+    actions: list[dict],
+    run_history: list[dict],
+    error_logs: list[dict],
 ) -> None:
     demo_cards = [
-        ("Cron workflows", format_number(len(scheduler_df)), "GitHub Actions", "accent-blue"),
         ("Run-log span", f"{run_bounds['span_hours']:.1f}h", "database evidence", "accent-teal"),
         ("Runs in 48h", format_number(len(runs_48h)), "recent executions", "accent-navy"),
         ("Artifacts", format_number(int((artifacts["status"] == "Observed").sum())), "observed outputs", "accent-amber"),
+        ("Audit tables", format_number(3), "run_log, seen_items, snapshots", "accent-blue"),
     ]
     body = "".join(
         (
@@ -1163,7 +1459,8 @@ def render_demo(
 
     if run_bounds["span_hours"] >= 48:
         st.success(
-            f"48h scheduler evidence present: runs span {format_dt(run_bounds['first_run'])} to {format_dt(run_bounds['last_run'])}."
+            "48h scheduler evidence present: "
+            f"{format_dt_israel(run_bounds['first_run'])} to {format_dt_israel(run_bounds['last_run'])}."
         )
     elif run_bounds["total_runs"]:
         st.warning(
@@ -1172,24 +1469,30 @@ def render_demo(
     else:
         st.info("No run-log evidence yet. Let GitHub Actions cron fire at least once.")
 
-    render_section("Pipeline Event List", "The lifecycle every workflow follows from scheduled trigger to proof artifact.")
-    render_pipeline_events()
-
-    render_section("Architecture", "Scheduled workflows, classifiers, database state, and external artifact systems.")
-    render_architecture()
-
-    render_section("Scheduler Proof", "Cron definitions read from the repository workflow files.")
-    st.dataframe(scheduler_df, use_container_width=True, hide_index=True)
-
+    render_section("Last 48 Hours", "Recorded workflow executions from Postgres, shown in Israel and UTC time.")
     runs_table = runs_since_table(runs_48h)
-    render_section("Last 48 Hours", "Recorded workflow executions from Postgres.")
     if runs_table.empty:
         st.info("No runs in the last 48 hours.")
     else:
-        st.dataframe(runs_table, use_container_width=True, hide_index=True)
+        st.dataframe(runs_table, width="stretch", hide_index=True)
 
-    render_section("Real Artifacts", "Latest external outputs and database evidence.")
-    st.dataframe(artifacts, use_container_width=True, hide_index=True)
+    render_section("Real Artifacts", "Latest Slack, Calendar, Sheets, email, dedup, and snapshot proof.")
+    st.dataframe(artifacts, width="stretch", hide_index=True)
+
+    with st.expander("Decisions and actions"):
+        render_section("LLM Decisions", "Structured labels and reasoning written to the audit log.")
+        decisions_df = to_table(decisions)
+        if decisions_df.empty:
+            st.info("No LLM decisions recorded yet.")
+        else:
+            st.dataframe(decisions_df, width="stretch", hide_index=True)
+
+        render_section("External Actions", "Slack, Calendar, Sheets, and email writes recorded by workflow runs.")
+        actions_df = to_table(actions)
+        if actions_df.empty:
+            st.info("No actions recorded yet.")
+        else:
+            st.dataframe(actions_df, width="stretch", hide_index=True)
 
     with st.expander("Database audit trail"):
         render_section("Pricing Snapshots")
@@ -1197,23 +1500,20 @@ def render_demo(
         if snapshot_table.empty:
             st.info("No pricing snapshots stored yet.")
         else:
-            st.dataframe(snapshot_table, use_container_width=True, hide_index=True)
+            st.dataframe(snapshot_table, width="stretch", hide_index=True)
 
         render_section("Seen Item Summary")
         seen_table = seen_summary_table(seen_summary)
         if seen_table.empty:
             st.info("No seen items stored yet.")
         else:
-            st.dataframe(seen_table, use_container_width=True, hide_index=True)
+            st.dataframe(seen_table, width="stretch", hide_index=True)
 
-    with st.expander("Loom narration"):
-        st.code(
-            """Argus is an autonomous competitive-intelligence agent.
-GitHub Actions cron wakes up each workflow on schedule.
-Each workflow fetches external signals, deduplicates or snapshots state, asks Mistral for a structured classification, then writes actions to Slack, Calendar, Sheets, or email.
-The run_log, seen_items, and page_snapshots tables give us the audit trail showing what happened over time.""",
-            language="text",
-        )
+    render_section("Run History", "Expandable audit records with decisions, actions, and tracebacks.")
+    render_run_history(run_history)
+
+    render_section("Errors", "Workflow failures captured in the last 24 hours.")
+    render_errors(error_logs)
 
 
 def render_run_history(runs: list[dict]) -> None:
@@ -1231,10 +1531,10 @@ def render_run_history(runs: list[dict]) -> None:
         )
         with st.expander(title):
             render_section("Decisions")
-            st.dataframe(to_table(run["decisions"]), use_container_width=True, hide_index=True)
+            st.dataframe(to_table(run["decisions"]), width="stretch", hide_index=True)
 
             render_section("Actions")
-            st.dataframe(to_table(run["actions"]), use_container_width=True, hide_index=True)
+            st.dataframe(to_table(run["actions"]), width="stretch", hide_index=True)
 
             if run["errors"]:
                 render_section("Errors")
@@ -1309,47 +1609,25 @@ render_header(profile)
 render_status(profile)
 render_metrics(totals, error_rate)
 
-demo_tab, overview_tab, decisions_tab, actions_tab, runs_tab, errors_tab = st.tabs(
-    ["Demo", "Overview", "Decisions", "Actions", "Runs", "Errors"]
+command_tab, flow_tab, evidence_tab = st.tabs(
+    ["Command Center", "Flow", "Evidence"]
 )
 
-with demo_tab:
-    render_demo(scheduler_df, run_bounds, runs_48h, artifacts, snapshots, seen_summary)
+with command_tab:
+    render_command_center(summary_df, recent_runs, runs_48h, actions_30d)
 
-with overview_tab:
-    render_section("Workflow Summary", "Last observed run and cumulative volume by workflow.")
-    if summary_df.empty:
-        st.info("No workflow runs recorded yet.")
-    else:
-        st.dataframe(summary_table(summary_df), use_container_width=True, hide_index=True)
+with flow_tab:
+    render_flow(scheduler_df)
 
-    render_section("Recent Runs", "Latest execution windows with item, action, and error counts.")
-    recent_table = recent_runs_table(recent_runs)
-    if recent_table.empty:
-        st.info("No recent runs recorded yet.")
-    else:
-        st.dataframe(recent_table, use_container_width=True, hide_index=True)
-
-with decisions_tab:
-    render_section("LLM Decisions", "Structured labels and reasoning written to the audit log.")
-    decisions_df = to_table(decisions)
-    if decisions_df.empty:
-        st.info("No LLM decisions recorded yet.")
-    else:
-        st.dataframe(decisions_df, use_container_width=True, hide_index=True)
-
-with actions_tab:
-    render_section("External Actions", "Slack, Calendar, Sheets, and email writes recorded by workflow runs.")
-    actions_df = to_table(actions)
-    if actions_df.empty:
-        st.info("No actions recorded yet.")
-    else:
-        st.dataframe(actions_df, use_container_width=True, hide_index=True)
-
-with runs_tab:
-    render_section("Run History", "Expandable audit records with decisions, actions, and tracebacks.")
-    render_run_history(run_history)
-
-with errors_tab:
-    render_section("Errors", "Workflow failures captured in the last 24 hours.")
-    render_errors(error_logs)
+with evidence_tab:
+    render_evidence(
+        run_bounds,
+        runs_48h,
+        artifacts,
+        snapshots,
+        seen_summary,
+        decisions,
+        actions,
+        run_history,
+        error_logs,
+    )
