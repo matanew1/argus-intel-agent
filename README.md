@@ -157,3 +157,4 @@ Shows:
 
 For full service setup instructions see [docs/api_setup.md](docs/api_setup.md).
 For architecture details see [docs/architecture.md](docs/architecture.md).
+For a full workflow deep dive and Loom demo guide see [docs/workflow_deep_dive_and_demo_guide.md](docs/workflow_deep_dive_and_demo_guide.md).
