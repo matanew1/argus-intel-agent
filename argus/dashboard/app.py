@@ -22,7 +22,7 @@ from argus.core.models import PageSnapshot, RunLog, SeenItem
 LOGO_PATH = ROOT_DIR / "assets" / "logo.png"
 PAGE_ICON = str(LOGO_PATH) if LOGO_PATH.exists() else "A"
 
-st.set_page_config(page_title="Argus Intel", layout="wide", page_icon=PAGE_ICON)
+st.set_page_config(page_title="Argus", layout="wide", page_icon=PAGE_ICON)
 
 _SUMMARY_COLUMNS = ["workflow", "last_run", "total_runs", "total_items"]
 _RUN_COLUMNS = [
@@ -668,7 +668,7 @@ def render_styles() -> None:
             margin-bottom: 1.5rem;
         }
         .argus-brand { display: flex; align-items: center; gap: 1.25rem; min-width: 0; }
-        .argus-logo img { width: 140px; max-width: 18vw; height: auto; display: block; }
+        .argus-logo img { width: 180px; max-width: 22vw; height: auto; display: block; }
         .argus-eyebrow {
             font-size: 0.75rem; font-weight: 700; color: var(--argus-teal);
             letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem;
@@ -902,7 +902,7 @@ def render_styles() -> None:
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
-            .argus-logo img { width: 104px; max-width: 38vw; }
+            .argus-logo img { width: 128px; max-width: 44vw; }
             .argus-brand { align-items: flex-start; }
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: 1fr; }
             .argus-pipeline-row { grid-template-columns: 2.8rem minmax(0, 1fr); }
@@ -1036,7 +1036,7 @@ def render_header(profile: dict) -> None:
             f'<div class="argus-logo">{logo_markup}</div>'
             '<div class="argus-title-block">'
             '<div class="argus-eyebrow">Competitive intelligence operations</div>'
-            '<h1>Argus Intel</h1>'
+            '<h1>Argus</h1>'
             '<div class="argus-subtitle">Scheduler evidence, LLM decisions, external actions, and operational health.</div>'
             '</div>'
             '</div>'
