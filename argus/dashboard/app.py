@@ -72,7 +72,7 @@ _PIPELINE_STEPS = [
 ]
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_error_rate(hours: int = 24) -> dict:
     session = SessionLocal()
     try:
@@ -94,7 +94,7 @@ def load_error_rate(hours: int = 24) -> dict:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_run_summary() -> pd.DataFrame:
     session = SessionLocal()
     try:
@@ -116,7 +116,7 @@ def load_run_summary() -> pd.DataFrame:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_recent_actions(n: int = 20) -> list[dict]:
     session = SessionLocal()
     try:
@@ -142,7 +142,7 @@ def load_recent_actions(n: int = 20) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_actions_since(days: int = 30) -> list[dict]:
     session = SessionLocal()
     try:
@@ -174,7 +174,7 @@ def load_actions_since(days: int = 30) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_error_logs(hours: int = 24) -> list[dict]:
     session = SessionLocal()
     try:
@@ -196,7 +196,7 @@ def load_error_logs(hours: int = 24) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_recent_decisions(n: int = 40) -> list[dict]:
     session = SessionLocal()
     try:
@@ -221,7 +221,7 @@ def load_recent_decisions(n: int = 40) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_runs_since(hours: int = 48) -> list[dict]:
     session = SessionLocal()
     try:
@@ -250,7 +250,7 @@ def load_runs_since(hours: int = 48) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_run_bounds() -> dict:
     session = SessionLocal()
     try:
@@ -279,7 +279,7 @@ def load_run_bounds() -> dict:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_run_history(n: int = 20) -> list[dict]:
     session = SessionLocal()
     try:
@@ -303,7 +303,7 @@ def load_run_history(n: int = 20) -> list[dict]:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_seen_summary() -> pd.DataFrame:
     session = SessionLocal()
     try:
@@ -326,7 +326,7 @@ def load_seen_summary() -> pd.DataFrame:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_page_snapshots(n: int = 20) -> pd.DataFrame:
     session = SessionLocal()
     try:
@@ -344,7 +344,7 @@ def load_page_snapshots(n: int = 20) -> pd.DataFrame:
         session.close()
 
 
-@st.cache_data(ttl=_REFRESH_TTL_SECONDS)
+@st.cache_data(ttl=_REFRESH_TTL_SECONDS, show_spinner=False)
 def load_recent_runs(n: int = 8) -> pd.DataFrame:
     session = SessionLocal()
     try:
@@ -474,7 +474,7 @@ def dashboard_totals(
     }
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def logo_data_uri(path: str) -> str:
     logo_file = Path(path)
     if not logo_file.exists():
@@ -639,6 +639,18 @@ def render_styles() -> None:
             height: 60vh;
             animation: fadeIn 0.3s ease-in;
         }
+        .argus-splash-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 320px;
+            padding: 2rem 2.25rem;
+            border: 1px solid var(--argus-border);
+            border-radius: 1rem;
+            background: var(--argus-panel);
+            box-shadow: 0 24px 60px rgba(18, 36, 58, 0.10);
+        }
         .argus-splash-spinner {
             width: 48px;
             height: 48px;
@@ -654,6 +666,12 @@ def render_styles() -> None:
             color: var(--argus-navy);
             letter-spacing: -0.01em;
         }
+        .argus-splash-subtext {
+            margin-top: 0.4rem;
+            color: var(--argus-muted);
+            font-size: 0.88rem;
+            font-weight: 500;
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
 
@@ -668,12 +686,11 @@ def render_styles() -> None:
             margin-bottom: 1.5rem;
         }
         .argus-brand { display: flex; align-items: center; gap: 1.25rem; min-width: 0; }
-        .argus-logo img { width: 180px; max-width: 22vw; height: auto; display: block; }
+        .argus-logo img { width: 230px; max-width: 28vw; height: auto; display: block; }
         .argus-eyebrow {
             font-size: 0.75rem; font-weight: 700; color: var(--argus-teal);
             letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem;
         }
-        .argus-subtitle { color: var(--argus-muted); font-size: 1rem; margin-top: 0.35rem; font-weight: 500; }
         
         /* Status Dot Pulsing */
         .argus-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--argus-muted); }
@@ -894,7 +911,9 @@ def render_styles() -> None:
         div[data-testid="stAlert"] * { color: var(--argus-text); }
         div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] { color: var(--argus-text); }
         div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p { color: var(--argus-text); font-weight: 650; }
-        div[data-testid="stSpinner"] { margin: 1rem 0; }
+        div[data-testid="stSpinner"] {
+            display: none;
+        }
         
         @media (max-width: 900px) {
             .argus-header { align-items: flex-start; flex-direction: column; }
@@ -902,7 +921,7 @@ def render_styles() -> None:
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
-            .argus-logo img { width: 128px; max-width: 44vw; }
+            .argus-logo img { width: 168px; max-width: 58vw; }
             .argus-brand { align-items: flex-start; }
             .argus-kpi-grid, .argus-demo-strip { grid-template-columns: 1fr; }
             .argus-pipeline-row { grid-template-columns: 2.8rem minmax(0, 1fr); }
@@ -1036,8 +1055,6 @@ def render_header(profile: dict) -> None:
             f'<div class="argus-logo">{logo_markup}</div>'
             '<div class="argus-title-block">'
             '<div class="argus-eyebrow">Competitive intelligence operations</div>'
-            '<h1>Argus</h1>'
-            '<div class="argus-subtitle">Scheduler evidence, LLM decisions, external actions, and operational health.</div>'
             '</div>'
             '</div>'
             '<div class="argus-header-meta">'
@@ -1255,8 +1272,11 @@ with splash_placeholder.container():
     st.markdown(
         """
         <div class="argus-splash-container">
-            <div class="argus-splash-spinner"></div>
-            <div class="argus-splash-text">Compiling intelligence data...</div>
+            <div class="argus-splash-card">
+                <div class="argus-splash-spinner"></div>
+                <div class="argus-splash-text">Loading Argus Intelligence</div>
+                <div class="argus-splash-subtext">Preparing scheduler proof, run logs, decisions, and artifacts.</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True
