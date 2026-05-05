@@ -2,7 +2,7 @@ name: News Watch
 
 on:
   schedule:
-    - cron: '17 */2 * * *'  # Every 2 hours, offset from :00 to reduce scheduler delays
+    - cron: '0 */2 * * *'  # Every 2 hours
   workflow_dispatch:
     inputs:
       dry_run:
