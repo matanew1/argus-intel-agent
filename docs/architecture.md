@@ -103,7 +103,7 @@ On first visit a baseline is stored. On subsequent runs the hash is compared; if
 ## Scheduling
 
 ```
-Every 2h at :17 UTC ──► news-watch.yml     ──► python -m argus.workflows.news_watch
+Every 2h at :00 UTC ──► news-watch.yml     ──► python -m argus.workflows.news_watch
 Daily 8am ──► pricing-watch.yml  ──► python -m argus.workflows.pricing_watch
 Daily 9am ──► job-watch.yml      ──► python -m argus.workflows.job_watch
 Fri 4pm   ──► weekly-digest.yml  ──► python -m argus.workflows.weekly_digest

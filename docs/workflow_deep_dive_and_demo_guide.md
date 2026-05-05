@@ -73,13 +73,11 @@ Argus uses GitHub Actions as the production scheduler. Scheduled workflows run f
 
 | Workflow | File | Cron | Meaning |
 |---|---|---|---|
-| News Watch | `.github/workflows/news-watch.yml` | `17 */2 * * *` | Every 2 hours at minute 17 UTC |
+| News Watch | `.github/workflows/news-watch.yml` | `0 */2 * * *` | Every 2 hours at :00 UTC |
 | Pricing Watch | `.github/workflows/pricing-watch.yml` | `0 8 * * *` | Daily at 08:00 UTC |
 | Job Watch | `.github/workflows/job-watch.yml` | `0 9 * * *` | Daily at 09:00 UTC |
 | Weekly Digest | `.github/workflows/weekly-digest.yml` | `0 16 * * 5` | Friday at 16:00 UTC |
 | DB Cleanup | `.github/workflows/cleanup.yml` | `0 3 * * 0` | Sunday at 03:00 UTC |
-
-News Watch uses minute `17` instead of minute `0` because GitHub scheduled workflows can be delayed during high scheduler load, especially at the top of the hour. The cadence is still every two hours, but offset to reduce delay.
 
 News Watch also has:
 
@@ -340,10 +338,10 @@ News Watch monitors competitor news, filters out unrelated articles, classifies 
 GitHub Actions cron:
 
 ```yaml
-cron: '17 */2 * * *'
+cron: '0 */2 * * *'
 ```
 
-Meaning: every 2 hours at minute 17 UTC.
+Meaning: every 2 hours at :00 UTC.
 
 ### Inputs
 
@@ -874,19 +872,13 @@ What to show:
 
 ## 17. Dashboard Demo Tab
 
-The Streamlit dashboard has a Demo tab designed for presentation.
+The Streamlit dashboard has three tabs designed for presentation.
 
-It shows:
+**Command Center** — run volume bar chart, action breakdown donut, workflow summary table.
 
-- Cron workflows.
-- Run-log span.
-- Runs in the last 48 hours.
-- Artifact checklist.
-- Architecture graph.
-- Scheduler proof table from the actual `.github/workflows/*.yml` files.
-- Pricing snapshots.
-- Seen item summary.
-- Loom narration text.
+**Flow** — 8-step pipeline diagram, architecture graph, scheduler proof table read from `.github/workflows/*.yml`.
+
+**Evidence** — 4 proof cards (run-log span, runs in 48h, artifacts, audit tables), real artifact checklist, last 48h run table, LLM decisions expander, and a full audit trail expander (actions, snapshots, seen items, run history, errors).
 
 Run it locally:
 
@@ -977,7 +969,7 @@ Show:
 Say:
 
 ```text
-The scheduler is GitHub Actions cron. These are not manually triggered demo scripts. News Watch runs every two hours at :17 UTC, Pricing Watch runs daily at 8am UTC, Job Watch runs daily at 9am UTC, and the Weekly Digest runs Fridays at 4pm UTC.
+The scheduler is GitHub Actions cron. These are not manually triggered demo scripts. News Watch runs every two hours at :00 UTC, Pricing Watch runs daily at 8am UTC, Job Watch runs daily at 9am UTC, and the Weekly Digest runs Fridays at 4pm UTC.
 ```
 
 Show:
@@ -1090,7 +1082,7 @@ Yes. GitHub Actions cron triggers workflows automatically. In the Actions UI, sc
 
 ### Why are News Watch run times not exactly every two hours?
 
-GitHub scheduled workflows are best-effort and can be delayed. The workflow was moved from minute `0` to minute `17` to avoid the busiest scheduler minute. The cadence remains every two hours.
+GitHub scheduled workflows are best-effort and can be delayed. The cadence is every two hours at :00 UTC.
 
 ### What happens on the first Pricing Watch run?
 
@@ -1135,7 +1127,11 @@ Each classifier uses Pydantic models with `Literal[...]` label fields. Invalid s
 | Digest classifier | `argus/classifiers/digest.py` |
 | Dedup helpers | `argus/core/dedup.py` |
 | DB models | `argus/core/models.py` |
-| Dashboard | `argus/dashboard/app.py` |
+| Dashboard entry | `argus/dashboard/app.py` |
+| Dashboard DB queries | `argus/dashboard/data.py` |
+| Dashboard components | `argus/dashboard/components.py` |
+| Dashboard tabs | `argus/dashboard/tabs.py` |
+| Dashboard CSS | `argus/dashboard/styles.py` |
 | Slack integration | `argus/integrations/slack_client.py` |
 | Calendar integration | `argus/integrations/google_calendar.py` |
 | Sheets integration | `argus/integrations/google_sheets.py` |

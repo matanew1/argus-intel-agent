@@ -6,7 +6,7 @@ An always-on competitive intelligence agent that watches competitor companies an
 
 | Workflow | Schedule | Action |
 |---|---|---|
-| **News Watch** | Every 2 hours at :17 UTC | Classifies news → Calendar event (funding/launch) or Slack alert (controversy) |
+| **News Watch** | Every 2 hours UTC | Classifies news → Calendar event (funding/launch) or Slack alert (controversy) |
 | **Job Watch** | Daily 9am UTC | Clusters new roles → Google Sheet row for non-routine signals |
 | **Pricing Watch** | Daily 8am UTC | Diffs competitor pages → Slack DM + Calendar event for material changes |
 | **Weekly Digest** | Friday 4pm UTC | Synthesizes week's signals → Email + Slack TL;DR |
@@ -147,11 +147,12 @@ Changes are picked up on the next workflow run with no restart needed (ConfigLoa
 streamlit run argus/dashboard/app.py
 ```
 
-Shows:
-- System health banner (green/red based on last 24h error rate)
-- Last run per workflow with elapsed time
-- Last 20 actions feed
-- Error log with full tracebacks
+Three tabs:
+- **Command Center** — run volume chart, action breakdown, workflow summary
+- **Flow** — 8-step pipeline diagram, architecture graph, scheduler proof table
+- **Evidence** — 48h proof cards, artifact checklist, LLM decisions, full audit trail
+
+Dashboard code is split across `argus/dashboard/`: `app.py` (entry), `data.py` (DB queries), `components.py` (header/metrics), `tabs.py` (tab renderers), `styles.py` (CSS).
 
 ---
 
