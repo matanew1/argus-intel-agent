@@ -6,6 +6,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import pandas as pd
 import streamlit as st
 
 from argus.dashboard.data import (
@@ -18,7 +19,6 @@ from argus.dashboard.data import (
     load_page_snapshots,
     load_recent_actions,
     load_recent_decisions,
-    load_recent_runs,
     load_run_bounds,
     load_run_history,
     load_run_summary,
@@ -29,7 +29,7 @@ from argus.dashboard.data import (
 )
 from argus.dashboard.styles import render_styles
 from argus.dashboard.components import render_header, render_metrics, render_status
-from argus.dashboard.tabs import render_command_center, render_evidence, render_flow
+from argus.dashboard.tabs import render_how_it_works, render_overview, render_proof
 
 st.set_page_config(page_title="Argus", layout="wide", page_icon=PAGE_ICON)
 render_styles()
@@ -58,7 +58,6 @@ actions_30d  = load_actions_since(30)
 decisions    = load_recent_decisions(40)
 run_history  = load_run_history(20)
 error_logs   = load_error_logs()
-recent_runs  = load_recent_runs()
 runs_48h     = load_runs_since(48)
 run_bounds   = load_run_bounds()
 seen_summary = load_seen_summary()
@@ -66,7 +65,7 @@ snapshots    = load_page_snapshots()
 scheduler_df = load_scheduler_manifest()
 artifacts    = artifact_rows(actions_30d, snapshots, seen_summary)
 profile      = status_profile(error_rate)
-totals       = dashboard_totals(summary_df, actions, recent_runs, error_rate)
+totals       = dashboard_totals(summary_df, actions, pd.DataFrame(), error_rate)
 
 splash.empty()
 
@@ -75,13 +74,13 @@ render_header(profile)
 render_status(profile)
 render_metrics(totals, error_rate)
 
-command_tab, flow_tab, evidence_tab = st.tabs(["Command Center", "Flow", "Evidence"])
+overview_tab, how_tab, proof_tab = st.tabs(["Overview", "How It Works", "Proof"])
 
-with command_tab:
-    render_command_center(summary_df, recent_runs, runs_48h, actions_30d)
+with overview_tab:
+    render_overview(summary_df, actions_30d)
 
-with flow_tab:
-    render_flow(scheduler_df)
+with how_tab:
+    render_how_it_works(scheduler_df)
 
-with evidence_tab:
-    render_evidence(run_bounds, runs_48h, artifacts, snapshots, seen_summary, decisions, actions, run_history, error_logs)
+with proof_tab:
+    render_proof(run_bounds, runs_48h, artifacts, snapshots, seen_summary, decisions, actions, run_history, error_logs)

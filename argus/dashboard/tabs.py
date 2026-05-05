@@ -1,114 +1,137 @@
-"""Tab renderers: Command Center, Flow, and Evidence."""
+"""Tab renderers: Overview, How It Works, and Proof."""
 import html
-from collections import Counter
 
 import pandas as pd
 import streamlit as st
 
 from argus.dashboard.components import render_section
 from argus.dashboard.data import (
-    ISRAEL_TZ,
     _json_array,
     format_dt,
     format_dt_israel,
     format_number,
+    humanize_time,
     page_snapshots_table,
-    recent_runs_table,
     runs_since_table,
     seen_summary_table,
-    summary_table,
     to_table,
 )
 
-_ACTION_COLORS = ["#2563eb", "#0d9488", "#d97706", "#7c3aed", "#dc2626", "#475569"]
-
 _PIPELINE_STEPS = [
-    ("01", "Scheduler fires",   "GitHub Actions cron starts a workflow on its configured cadence.",       "GitHub Actions"),
-    ("02", "Config loads",      "ConfigLoader reads competitors, criteria, and notification targets.",     "config.yaml"),
-    ("03", "Signals collected", "The workflow fetches news, jobs, pricing pages, or prior run logs.",      "Integrations"),
-    ("04", "State checked",     "Seen items dedup articles/jobs; page snapshots detect pricing changes.",  "Postgres"),
-    ("05", "LLM classifies",    "Mistral returns a structured label with reasoning.",                      "Mistral"),
-    ("06", "Decision logged",   "The label and reasoning are appended to run_log.decisions.",              "run_log"),
-    ("07", "Action dispatched", "Actionable signals create Slack, Calendar, Sheets, or email artifacts.", "External apps"),
-    ("08", "Proof surfaces",    "Dashboard reads run_log, seen_items, and page_snapshots.",                "Streamlit"),
+    ("01", "Scheduler fires",   "GitHub Actions cron triggers the workflow automatically.",          "GitHub Actions"),
+    ("02", "Config loads",      "Reads competitors, criteria, and notification targets.",            "config.yaml"),
+    ("03", "Signals fetched",   "Fetches news articles, job postings, pricing pages, or past logs.", "APIs / web"),
+    ("04", "Dedup check",       "Skips anything already seen. Pricing Watch uses page snapshots.",   "Postgres"),
+    ("05", "LLM classifies",    "Mistral assigns a structured label + reasoning to each signal.",    "Mistral"),
+    ("06", "Decision logged",   "Label and reasoning saved to run_log.decisions.",                   "run_log"),
+    ("07", "Action taken",      "Actionable signals write to Slack, Calendar, Sheets, or email.",    "Integrations"),
+    ("08", "Audit complete",    "run_log row saved. Dashboard reads it as evidence.",                "Dashboard"),
+]
+
+_WORKFLOW_SCHEDULES = [
+    ("News Watch",     "Every 2 hours",     "news, funding, launches, controversies", "Slack alert · Calendar event"),
+    ("Job Watch",      "Daily 9am UTC",     "new job postings per competitor",         "Google Sheets row"),
+    ("Pricing Watch",  "Daily 8am UTC",     "competitor pricing/product pages",        "Slack DM · Calendar event"),
+    ("Weekly Digest",  "Friday 4pm UTC",    "all signals from the past 7 days",        "Email · Slack TL;DR"),
 ]
 
 
-# ── Command Center ──────────────────────────────────────────────────────────
+# ── Tab 1: Overview ──────────────────────────────────────────────────────────
 
-def render_command_center(
-    summary_df: pd.DataFrame,
-    recent_runs: pd.DataFrame,
-    runs_48h: list[dict],
-    actions_30d: list[dict],
-) -> None:
-    left, right = st.columns([1.12, 0.88])
-    with left:
-        render_section("Run Volume", "Total executions recorded per workflow.")
-        if summary_df.empty:
-            st.info("No workflow runs recorded yet.")
-        else:
-            chart_df = summary_df[["workflow", "total_runs"]].copy()
-            chart_df["total_runs"] = chart_df["total_runs"].fillna(0).astype(int)
-            st.bar_chart(chart_df.sort_values("total_runs", ascending=False), x="workflow", y="total_runs", height=285, width="stretch")
-    with right:
-        _render_action_donut(actions_30d)
+def render_overview(summary_df: pd.DataFrame, actions_30d: list[dict]) -> None:
+    render_section("What Argus Monitors", "Four scheduled workflows, each with a different signal source and output.")
+    _render_workflow_cards()
 
-    render_section("Workflow Summary", "Last observed run and cumulative totals.")
+    render_section("Workflow Run Status", "Last run time and total executions per workflow.")
     if summary_df.empty:
-        st.info("No workflow runs recorded yet.")
+        st.info("No workflow runs recorded yet — waiting for the first scheduled run.")
     else:
-        st.dataframe(summary_table(summary_df), width="stretch", hide_index=True)
-
-
-def _render_action_donut(actions_30d: list[dict]) -> None:
-    counts = Counter(row["action"] or "unknown" for row in actions_30d)
-    if not counts:
-        st.markdown('<div class="argus-empty-state">No external actions recorded yet</div>', unsafe_allow_html=True)
-        return
-    top = counts.most_common(5)
-    other = sum(counts.values()) - sum(c for _, c in top)
-    if other:
-        top.append(("other", other))
-    total = sum(c for _, c in top)
-    start, segments, legend_rows = 0.0, [], []
-    for i, (name, count) in enumerate(top):
-        color = _ACTION_COLORS[i % len(_ACTION_COLORS)]
-        end = start + (count / total * 100)
-        segments.append(f"{color} {start:.2f}% {end:.2f}%")
-        legend_rows.append(
-            f'<div class="argus-legend-row">'
-            f'<span class="argus-legend-swatch" style="background:{color};"></span>'
-            f'<span>{html.escape(name)}</span>'
-            f'<span class="argus-legend-count">{format_number(count)}</span>'
-            f'</div>'
+        table = summary_df.copy()
+        table["last_run"] = table["last_run"].apply(format_dt_israel)
+        table["last_seen"] = summary_df["last_run"].apply(humanize_time)
+        table["total_runs"] = table["total_runs"].fillna(0).astype(int)
+        table["total_items"] = table["total_items"].fillna(0).astype(int)
+        st.dataframe(
+            table[["workflow", "last_seen", "last_run", "total_runs", "total_items"]],
+            width="stretch",
+            hide_index=True,
         )
-        start = end
-    st.markdown(
-        f'<div class="argus-chart-panel">'
-        f'<div class="argus-chart-title">Action Breakdown</div>'
-        f'<div class="argus-chart-caption">External artifacts by type, last 30 days.</div>'
-        f'<div class="argus-donut-layout">'
-        f'<div class="argus-donut" style="background:conic-gradient({", ".join(segments)});">'
-        f'<div class="argus-donut-center"><strong>{format_number(total)}</strong><span>actions</span></div>'
-        f'</div>'
-        f'<div class="argus-legend">{"".join(legend_rows)}</div>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+
+    if actions_30d:
+        render_section("Recent Actions", f"Last {min(5, len(actions_30d))} external writes (Slack, Calendar, Sheets, email).")
+        recent = actions_30d[:5]
+        rows = [{"time": format_dt_israel(r["time"]), "workflow": r["workflow"], "action": r["action"], "detail": (r.get("detail") or r.get("target") or "")[:80]} for r in recent]
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
-# ── Flow ─────────────────────────────────────────────────────────────────────
+def _render_workflow_cards() -> None:
+    cols = st.columns(4)
+    card_data = [
+        ("News Watch",    "Every 2h",    "Slack · Calendar", "#3b82f6"),
+        ("Job Watch",     "Daily 9am",   "Google Sheets",    "#0d9488"),
+        ("Pricing Watch", "Daily 8am",   "Slack DM · Cal",   "#d97706"),
+        ("Weekly Digest", "Fri 4pm",     "Email · Slack",    "#7c3aed"),
+    ]
+    for col, (name, schedule, output, color) in zip(cols, card_data):
+        with col:
+            st.markdown(
+                f'<div style="border:1px solid #e2e8f0;border-top:3px solid {color};border-radius:0.75rem;padding:1rem;background:#fff;">'
+                f'<div style="font-size:0.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">{html.escape(schedule)}</div>'
+                f'<div style="font-size:1rem;font-weight:700;color:#0f172a;margin:0.4rem 0 0.3rem;">{html.escape(name)}</div>'
+                f'<div style="font-size:0.82rem;color:#64748b;">{html.escape(output)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-def render_flow(scheduler_df: pd.DataFrame) -> None:
-    render_section("Pipeline Steps", "The same control path every scheduled workflow follows.")
-    _render_pipeline_steps()
 
-    render_section("Architecture", "Scheduler, workflows, classifier, database, and artifact outputs.")
+# ── Tab 2: How It Works ──────────────────────────────────────────────────────
+
+def render_how_it_works(scheduler_df: pd.DataFrame) -> None:
+    render_section("Architecture", "Every workflow follows the same path: cron → fetch → classify → act → log.")
     _render_architecture()
 
-    render_section("Scheduler Proof", "Cron definitions read from the repository workflow files.")
-    st.dataframe(scheduler_df, width="stretch", hide_index=True)
+    render_section("Step-by-Step Pipeline", "The exact same 8 steps for every scheduled run.")
+    _render_pipeline_steps()
+
+    render_section("Cron Schedule", "Actual cron definitions from the GitHub Actions workflow files.")
+    cols_to_show = [c for c in ["name", "cadence", "cron", "command"] if c in scheduler_df.columns]
+    st.dataframe(scheduler_df[cols_to_show], width="stretch", hide_index=True)
+
+
+def _render_architecture() -> None:
+    st.graphviz_chart(
+        """
+        digraph {
+          graph [rankdir=LR, bgcolor="transparent", pad="0.3", nodesep="0.6", ranksep="0.8"];
+          node [shape=box, style="rounded,filled", color="#B9C3D3", fillcolor="#FFFFFF",
+                fontname="Helvetica", fontsize=11, fontcolor="#172033"];
+          edge [color="#526174", arrowsize=0.8];
+
+          scheduler [label="GitHub Actions\\ncron", fillcolor="#EFF6FF", color="#93C5FD"];
+          config    [label="config.yaml"];
+          news      [label="News Watch"];
+          jobs      [label="Job Watch"];
+          pricing   [label="Pricing Watch"];
+          digest    [label="Weekly Digest"];
+          llm       [label="Mistral AI\\nclassifier", fillcolor="#ECFDF5", color="#99F6E4"];
+          db        [label="Postgres\\naudit trail",  fillcolor="#F8FAFC", color="#94A3B8"];
+          slack     [label="Slack",           fillcolor="#FFF7ED", color="#FDBA74"];
+          calendar  [label="Calendar",        fillcolor="#F0FDFA", color="#5EEAD4"];
+          sheets    [label="Sheets",          fillcolor="#F7FEE7", color="#BEF264"];
+          email     [label="Email",           fillcolor="#FEF2F2", color="#FCA5A5"];
+
+          scheduler -> news; scheduler -> jobs; scheduler -> pricing; scheduler -> digest;
+          config    -> news; config -> jobs; config -> pricing; config -> digest;
+          news    -> llm; jobs -> llm; pricing -> llm; digest -> llm;
+          llm     -> db;
+          news    -> slack; news -> calendar;
+          jobs    -> sheets;
+          pricing -> slack; pricing -> calendar;
+          digest  -> email; digest -> slack;
+        }
+        """,
+        width="stretch",
+    )
 
 
 def _render_pipeline_steps() -> None:
@@ -127,44 +150,9 @@ def _render_pipeline_steps() -> None:
     )
 
 
-def _render_architecture() -> None:
-    st.graphviz_chart(
-        """
-        digraph {
-          graph [rankdir=LR, bgcolor="transparent", pad="0.2", nodesep="0.55", ranksep="0.65"];
-          node [shape=box, style="rounded,filled", color="#B9C3D3", fillcolor="#FFFFFF", fontname="Helvetica", fontsize=11, fontcolor="#172033"];
-          edge [color="#526174", arrowsize=0.8];
+# ── Tab 3: Proof ─────────────────────────────────────────────────────────────
 
-          config    [label="config.yaml"];
-          scheduler [label="GitHub Actions cron", fillcolor="#EFF6FF", color="#93C5FD"];
-          news      [label="News Watch"];
-          jobs      [label="Job Watch"];
-          pricing   [label="Pricing Watch"];
-          digest    [label="Weekly Digest"];
-          llm       [label="Mistral classifiers", fillcolor="#ECFDF5", color="#99F6E4"];
-          db        [label="Postgres\\nrun_log, seen_items, snapshots", fillcolor="#F8FAFC", color="#94A3B8"];
-          slack     [label="Slack",          fillcolor="#FFF7ED", color="#FDBA74"];
-          calendar  [label="Google Calendar",fillcolor="#F0FDFA", color="#5EEAD4"];
-          sheets    [label="Google Sheets",  fillcolor="#F7FEE7", color="#BEF264"];
-          email     [label="Resend Email",   fillcolor="#FEF2F2", color="#FCA5A5"];
-
-          config -> news; config -> jobs; config -> pricing; config -> digest;
-          scheduler -> news; scheduler -> jobs; scheduler -> pricing; scheduler -> digest;
-          news -> llm; jobs -> llm; pricing -> llm; digest -> llm;
-          llm -> db;
-          news -> slack; news -> calendar;
-          jobs -> sheets;
-          pricing -> slack; pricing -> calendar;
-          digest -> email; digest -> slack;
-        }
-        """,
-        width="stretch",
-    )
-
-
-# ── Evidence ─────────────────────────────────────────────────────────────────
-
-def render_evidence(
+def render_proof(
     run_bounds: dict,
     runs_48h: list[dict],
     artifacts: pd.DataFrame,
@@ -177,24 +165,24 @@ def render_evidence(
 ) -> None:
     _render_proof_cards(run_bounds, runs_48h, artifacts)
 
-    render_section("Real Artifacts", "What Argus created — Slack, Calendar, Sheets, email, dedup, and snapshots.")
+    render_section("Artifacts Created", "Every real output Argus produced — checked against the database.")
     st.dataframe(artifacts, width="stretch", hide_index=True)
 
-    render_section("Last 48 Hours", "Workflow executions from Postgres.")
+    render_section("Runs in Last 48 Hours", "Scheduled executions recorded in Postgres.")
     runs_table = runs_since_table(runs_48h)
     if runs_table.empty:
         st.info("No runs in the last 48 hours.")
     else:
         st.dataframe(runs_table, width="stretch", hide_index=True)
 
-    with st.expander("LLM decisions"):
+    with st.expander("Deep dive — LLM decisions, actions, snapshots, run history, errors"):
+        render_section("LLM Decisions")
         decisions_df = to_table(decisions)
         if decisions_df.empty:
             st.info("No LLM decisions recorded yet.")
         else:
             st.dataframe(decisions_df, width="stretch", hide_index=True)
 
-    with st.expander("Full audit trail — actions, snapshots, seen items, run history, errors"):
         render_section("External Actions")
         actions_df = to_table(actions)
         if actions_df.empty:
@@ -209,7 +197,7 @@ def render_evidence(
         else:
             st.dataframe(snapshot_table, width="stretch", hide_index=True)
 
-        render_section("Seen Item Summary")
+        render_section("Seen Item Dedup")
         seen_table = seen_summary_table(seen_summary)
         if seen_table.empty:
             st.info("No seen items stored yet.")
@@ -225,10 +213,10 @@ def render_evidence(
 
 def _render_proof_cards(run_bounds: dict, runs_48h: list[dict], artifacts: pd.DataFrame) -> None:
     cards = [
-        ("Run-log span", f"{run_bounds['span_hours']:.1f}h",                                    "database evidence",         "accent-teal"),
-        ("Runs in 48h",  format_number(len(runs_48h)),                                          "recent executions",         "accent-navy"),
-        ("Artifacts",    format_number(int((artifacts["status"] == "Observed").sum())),          "observed outputs",          "accent-amber"),
-        ("Audit tables", format_number(3),                                                       "run_log, seen_items, snaps","accent-blue"),
+        ("Scheduler running for", f"{run_bounds['span_hours']:.0f}h", "hours of logged runs",  "accent-teal"),
+        ("Runs in last 48h",      format_number(len(runs_48h)),        "scheduled executions",  "accent-navy"),
+        ("Artifacts observed",    format_number(int((artifacts["status"] == "Observed").sum())), "real outputs created", "accent-amber"),
+        ("Audit tables",          "3",                                  "run_log · seen_items · snapshots", "accent-blue"),
     ]
     body = "".join(
         f'<div class="argus-proof {accent}">'
@@ -241,11 +229,11 @@ def _render_proof_cards(run_bounds: dict, runs_48h: list[dict], artifacts: pd.Da
     st.markdown(f'<div class="argus-demo-strip">{body}</div>', unsafe_allow_html=True)
 
     if run_bounds["span_hours"] >= 48:
-        st.success(f"48h evidence present: {format_dt_israel(run_bounds['first_run'])} → {format_dt_israel(run_bounds['last_run'])}.")
+        st.success(f"48h requirement met — {format_dt_israel(run_bounds['first_run'])} → {format_dt_israel(run_bounds['last_run'])}.")
     elif run_bounds["total_runs"]:
-        st.warning(f"Run log spans {run_bounds['span_hours']:.1f}h. Keep scheduled runs enabled until this reaches 48h.")
+        st.warning(f"Run log spans {run_bounds['span_hours']:.1f}h so far. Need 48h for full evidence.")
     else:
-        st.info("No run-log evidence yet. Let GitHub Actions cron fire at least once.")
+        st.info("No runs recorded yet. Let GitHub Actions cron fire at least once.")
 
 
 def _render_run_history(runs: list[dict]) -> None:
@@ -253,22 +241,18 @@ def _render_run_history(runs: list[dict]) -> None:
         st.info("No runs recorded yet.")
         return
     for run in runs:
-        title = (
+        label = (
             f"{run['workflow']} — {format_dt(run['trigger_time'])} — "
-            f"{run['items_processed']} item(s), {len(run['decisions'])} decision(s), "
-            f"{len(run['actions'])} action(s), {len(run['errors'])} error(s)"
+            f"{run['items_processed']} items · {len(run['decisions'])} decisions · "
+            f"{len(run['actions'])} actions · {len(run['errors'])} errors"
         )
-        with st.expander(title):
-            render_section("Decisions")
+        with st.expander(label):
             st.dataframe(to_table(run["decisions"]), width="stretch", hide_index=True)
-            render_section("Actions")
-            st.dataframe(to_table(run["actions"]), width="stretch", hide_index=True)
-            if run["errors"]:
-                render_section("Errors")
-                for err in run["errors"]:
-                    st.error(err.get("error", "Unknown error"))
-                    if err.get("traceback"):
-                        st.code(err["traceback"], language="python")
+            st.dataframe(to_table(run["actions"]),   width="stretch", hide_index=True)
+            for err in run["errors"]:
+                st.error(err.get("error", "Unknown error"))
+                if err.get("traceback"):
+                    st.code(err["traceback"], language="python")
 
 
 def _render_errors(error_logs: list[dict]) -> None:
